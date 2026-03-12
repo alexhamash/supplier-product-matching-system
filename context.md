@@ -7,6 +7,7 @@ The system is designed to solve the problem of managing multiple supplier produc
 The primary users are e-commerce store managers or employees responsible for working with suppliers and managing product assortments.
 
 ## Key Features & Processes
+- **Authentication**: Secure login and logout to protect store and supplier data.
 - **Import Supplier Catalogs**: Import supplier product catalogs (usually via spreadsheet links).
 - **Display Supplier Products**: View supplier products within the system.
 - **Manual Matching**: Allow manual matching between the store’s main product and supplier products.
@@ -24,6 +25,7 @@ Matching can be based on several criteria:
 Initially, the system will focus on simple matching logic (SKU and name similarity).
 
 ## Business Goals
+- **Secure Access**: Ensure only authorized users can manage catalogs and matches.
 - **Reduce Manual Work**: Decrease the effort required when working with supplier catalogs.
 - **Centralize Data**: Centralize supplier data in one system.
 - **Improve Accuracy**: Enhance the precision of product matching.
