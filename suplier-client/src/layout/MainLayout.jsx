@@ -6,6 +6,7 @@ const MainLayout = () => {
     <>
         <div>
             <NavLink to="/">Dashboard</NavLink>
+            <NavLink to="/main-products">Main Products</NavLink>
             <NavLink to="/suppliers">Suppliers</NavLink>
             <NavLink to="/supplier-products">Supplier Products</NavLink>
             <NavLink to="/product-matching">Product Matching</NavLink>
