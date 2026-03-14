@@ -42,12 +42,11 @@ const Suppliers = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Suppliers List</h2>
         {/* Кнопка для додавання нового постачальника */}
-        
         <button onClick={() => setIsFormVisible(true)} style={{ padding: '10px 15px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>
           + Add New Supplier
         </button>
       </div>
-      
+
       {message && <div style={{ color: 'green', padding: '10px' }}>{message}</div>}
 
       {isFormVisible && (
