@@ -1,9 +1,24 @@
-import React from 'react'
+import React from "react";
+import { useState, useEffect } from "react";
+import { getSuppliers } from "../services/supplierService";
 
 const Suppliers = () => {
-  return (
-    <div>Suppliers</div>
-  )
-}
+  const [suppliers, setSuppliers] = useState([]);
 
-export default Suppliers
+  useEffect(() => {
+    const data = getSuppliers();
+    setSuppliers(data);
+  }, []);
+
+  return (
+    <div>
+      {suppliers.map(supplier => (
+        <div key={supplier.id}>
+          {supplier.name} - {supplier.sheet}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default Suppliers;
