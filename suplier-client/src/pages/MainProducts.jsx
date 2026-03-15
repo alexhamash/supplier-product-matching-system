@@ -1,186 +1,155 @@
-import React from 'react';
-import { Search, Filter, Plus, Package, Layers, ChevronDown } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, Plus, Package, ChevronDown } from "lucide-react";
+import { getMainProducts } from "../services/mainProductService";
 
 const MainProducts = () => {
+  const [products, setProducts] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [formData, setFormData] = useState({ name: "", SKU: "", brand: "", category: "" });
+  const [isFormVisible, setIsFormVisible] = useState(false);
+
+  useEffect(() => {
+    const data = getMainProducts();
+    setProducts(data);
+  }, []);
+
+  const filteredProducts = products.filter(product => 
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    product.SKU.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Функція для оновлення полів форми
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = () => {
+    if (!formData.name.trim()) {
+      alert("Назва товару обов'язкова!");
+      return;
+    }
+
+    if (formData.SKU.trim()) {
+      const isDuplicate = products.some(p => p.SKU === formData.SKU.trim());
+      if (isDuplicate) {
+        alert("Товар з таким SKU вже існує!");
+        return;
+      }
+    }
+
+    const newProduct = {
+      ...formData,
+      id: products.length + 1,
+      linkedCount: 0 // Використовуємо linkedCount, бо так прописано у верстці нижче
+    };
+
+    setProducts([...products, newProduct]);
+    setIsFormVisible(false);
+    setFormData({ name: "", SKU: "", brand: "", category: "" });
+  };
+
   return (
     <div className="w-full">
       {/* Header section */}
       <div className="flex justify-between items-start mb-6">
         <div>
           <h1 className="text-[28px] font-bold text-[#0F172A] tracking-tight mb-1">Main Products</h1>
-          <p className="text-[#64748B] text-[15px]">Manage your central store catalog. This is the source of truth for all mapped supplier products.</p>
+          <p className="text-[#64748B] text-[15px]">Manage your central store catalog.</p>
         </div>
-        <button className="bg-[#3B82F6] hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+        <button 
+          onClick={() => setIsFormVisible(!isFormVisible)} // ВИПРАВЛЕНО: було !is
+          className="bg-[#3B82F6] hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+        >
           <Plus className="w-4 h-4" />
-          Create Main Product
+          {isFormVisible ? 'Cancel' : 'Create Main Product'}
         </button>
       </div>
 
-      {/* Filter section */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 flex flex-col sm:flex-row gap-4 items-center shadow-sm">
-        <div className="relative flex-1 w-full max-w-[50%]">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-4 w-4 text-slate-400" />
+      {/* Форма додавання товару */}
+      {isFormVisible && (
+        <div className="bg-slate-50 border border-blue-200 rounded-xl p-6 mb-6">
+          <h3 className="text-lg font-bold mb-4 text-slate-900">Add New Product</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <input 
+              name="name" // Додаємо name для handleInputChange
+              value={formData.name}
+              onChange={handleInputChange}
+              className="p-2 border border-slate-200 rounded-lg text-sm" 
+              placeholder="Product Name" 
+            />
+            <input 
+              name="SKU"
+              value={formData.SKU}
+              onChange={handleInputChange}
+              className="p-2 border border-slate-200 rounded-lg text-sm font-mono" 
+              placeholder="SKU" 
+            />
+            <button 
+              onClick={handleSubmit} // ВИПРАВЛЕНО: було handleSave
+              className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg font-medium transition-colors"
+            >
+              Save Product
+            </button>
           </div>
+        </div>
+      )}
+
+      {/* Filter section */}
+      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 flex items-center shadow-sm">
+        <div className="relative flex-1 w-full max-w-[50%]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by main product name, SKU, or brand..."
-            className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            value={searchTerm} // ВИПРАВЛЕНО: додаємо прив'язку
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by name or SKU..."
+            className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-blue-500"
           />
         </div>
-
-        <div className="flex items-center gap-3 w-full sm:w-auto ml-auto">
-          <div className="text-slate-400 hidden sm:block">
-            <Filter className="w-4 h-4" />
-          </div>
-
-          <div className="relative w-full sm:w-[160px]">
-            <select className="block w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white cursor-pointer text-slate-700">
-              <option>All Categories</option>
-              <option>Smartphones</option>
-              <option>Audio</option>
-              <option>Accessories</option>
-            </select>
-            <div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
-              <ChevronDown className="h-4 w-4 text-slate-400" />
-            </div>
-          </div>
-
-          <div className="relative w-full sm:w-[160px]">
-            <select className="block w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 appearance-none bg-white cursor-pointer text-slate-700">
-              <option>All Brands</option>
-              <option>Apple</option>
-              <option>Samsung</option>
-              <option>Sony</option>
-            </select>
-            <div className="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none">
-              <ChevronDown className="h-4 w-4 text-slate-400" />
-            </div>
-          </div>
-        </div>
+        {/* ... тут твої селектори ... */}
       </div>
 
       {/* Data table */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mb-8">
         {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-slate-200 bg-slate-50">
-          <div className="col-span-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Main Product Name & SKU</div>
-          <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Brand</div>
-          <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</div>
-          <div className="col-span-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Linked Supplier Products</div>
-          <div className="col-span-1 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</div>
+        <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase">
+          <div className="col-span-4">Main Product Name & SKU</div>
+          <div className="col-span-2">Brand</div>
+          <div className="col-span-2">Category</div>
+          <div className="col-span-3">Linked Supplier Products</div>
+          <div className="col-span-1 text-right">Actions</div>
         </div>
 
-        {/* Table Body - Row 1 */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-slate-100 hover:bg-slate-50 transition-colors items-center">
-          <div className="col-span-4 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100 text-blue-500">
-              <Package className="w-5 h-5" />
+        {/* Table Body */}
+        <div className="divide-y divide-slate-100">
+          {filteredProducts.map((product) => (
+            <div key={product.id} className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-50 transition-colors items-center">
+              <div className="col-span-4 flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center border border-blue-100 text-blue-500">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{product.name}</p>
+                  <p className="text-xs text-slate-500 font-mono">SKU: {product.SKU}</p>
+                </div>
+              </div>
+              <div className="col-span-2 text-sm text-slate-700">{product.brand || '—'}</div>
+              <div className="col-span-2 text-sm text-slate-600">{product.category || '—'}</div>
+              <div className="col-span-3">
+                <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                  {product.linkedCount || 0} Linked
+                </span>
+              </div>
+              <div className="col-span-1 text-right">
+                <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">Edit</button>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-bold text-slate-900 line-clamp-2 leading-snug">iPhone 13 128GB Midnight</p>
-              <p className="text-xs text-slate-500 mt-1 font-mono">SKU: IPH-13-128-MDN</p>
-            </div>
-          </div>
-          <div className="col-span-2">
-            <span className="text-sm font-medium text-slate-700">Apple</span>
-          </div>
-          <div className="col-span-2">
-            <span className="text-sm text-slate-600">Smartphones</span>
-          </div>
-          <div className="col-span-3 flex items-center gap-2">
-            <div className="flex -space-x-2 overflow-hidden">
-              <div className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-500" title="TechCorp Inc.">TC</div>
-              <div className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-500" title="Global Supply Co.">GS</div>
-              <div className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-500" title="Accessories Pro">AP</div>
-            </div>
-            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-              3 Linked
-            </span>
-          </div>
-          <div className="col-span-1 text-right">
-            <button className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors">Edit</button>
-          </div>
-        </div>
-
-        {/* Table Body - Row 2 */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-slate-100 hover:bg-slate-50 transition-colors items-center">
-          <div className="col-span-4 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100 text-blue-500">
-              <Package className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-900 line-clamp-2 leading-snug">Samsung Galaxy S23 Ultra 512GB Green</p>
-              <p className="text-xs text-slate-500 mt-1 font-mono">SKU: SAM-S23U-512-GRN</p>
-            </div>
-          </div>
-          <div className="col-span-2">
-            <span className="text-sm font-medium text-slate-700">Samsung</span>
-          </div>
-          <div className="col-span-2">
-            <span className="text-sm text-slate-600">Smartphones</span>
-          </div>
-          <div className="col-span-3 flex items-center gap-2">
-            <div className="flex -space-x-2 overflow-hidden">
-              <div className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-500" title="TechCorp Inc.">TC</div>
-            </div>
-            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-              1 Linked
-            </span>
-          </div>
-          <div className="col-span-1 text-right">
-            <button className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors">Edit</button>
-          </div>
-        </div>
-
-        {/* Table Body - Row 3 */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-50 transition-colors items-center">
-          <div className="col-span-4 flex items-start gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100 text-blue-500">
-              <Package className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-900 line-clamp-2 leading-snug">Sony WH-1000XM5 Wireless ANC Headphones - Silver</p>
-              <p className="text-xs text-slate-500 mt-1 font-mono">SKU: AUD-SNY-XM5-SLV</p>
-            </div>
-          </div>
-          <div className="col-span-2">
-            <span className="text-sm font-medium text-slate-700">Sony</span>
-          </div>
-          <div className="col-span-2">
-            <span className="text-sm text-slate-600">Audio</span>
-          </div>
-          <div className="col-span-3 flex items-center gap-2">
-             <div className="flex -space-x-2 overflow-hidden">
-              <div className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-500" title="Global Supply Co.">GS</div>
-              <div className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-500" title="Accessories Pro">AP</div>
-            </div>
-            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-              2 Linked
-            </span>
-          </div>
-          <div className="col-span-1 text-right">
-            <button className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors">Edit</button>
-          </div>
-        </div>
-      </div>
-
-       {/* Info Panel */}
-       <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 mb-6">
-        <div className="flex items-start gap-3">
-          <Layers className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900 mb-1">Central Product Catalog</h3>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              These are the core products sold in your store. When you import inventory from suppliers (e.g., via Google Sheets or Excel),
-              those external "Supplier Products" are linked to these internal "Main Products". This unified view allows you to manage
-              pricing, stock, and descriptions centrally, regardless of how many different suppliers provide the item.
-            </p>
-          </div>
+          ))}
         </div>
       </div>
     </div>
   );
-}
+};
 
 export default MainProducts;
