@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard"
 import Suppliers from "./pages/Suppliers"
 import SupplierProducts from "./pages/SupplierProducts"
 import ProductMatching from "./pages/ProductMatching"
+import MainProducts from "./pages/MainProducts"
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Route path="suppliers" element={<Suppliers />} />
         <Route path="supplier-products" element={<SupplierProducts />} />
         <Route path="product-matching" element={<ProductMatching />} />
+        <Route path="main-products" element={<MainProducts />} />
       </Route>
     </Routes>
 

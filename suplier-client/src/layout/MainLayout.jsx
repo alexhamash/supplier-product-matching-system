@@ -8,7 +8,8 @@ import {
   Settings,
   Bell,
   Search,
-  Share2
+  Share2,
+  Database
 } from "lucide-react";
 
 const MainLayout = () => {
@@ -50,6 +51,17 @@ const MainLayout = () => {
               >
                 <Users className="w-5 h-5" />
                 Suppliers
+              </NavLink>
+              <NavLink
+                to="/main-products"
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive ? 'bg-[#EFF6FF] text-[#2563EB]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`
+                }
+              >
+                <Database className="w-5 h-5" />
+                Main Products
               </NavLink>
               <NavLink
                 to="/supplier-products"
