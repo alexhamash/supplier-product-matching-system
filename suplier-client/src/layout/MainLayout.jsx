@@ -8,7 +8,7 @@ const MainLayout = () => {
             <NavLink to="/">Dashboard</NavLink>
             <NavLink to="/main-products">Main Products</NavLink>
             <NavLink to="/suppliers">Suppliers</NavLink>
-            <NavLink to="/supplier-products">Supplier Products</NavLink>
+            <NavLink to="/supplier-products/1">Supplier Products</NavLink>
             <NavLink to="/product-matching">Product Matching</NavLink>
         </div>
         

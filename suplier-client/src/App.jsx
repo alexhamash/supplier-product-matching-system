@@ -5,6 +5,8 @@ import Suppliers from "./pages/Suppliers"
 import SupplierProducts from "./pages/SupplierProducts"
 import ProductMatching from "./pages/ProductMatching"
 import MainProducts from "./pages/MainProducts"
+import SupplierImport from "./pages/SupplierImport"
+
 
 function App() {
   return (
@@ -13,8 +15,9 @@ function App() {
         <Route index element={<Dashboard />} />
         <Route path="main-products" element={<MainProducts />} /> 
         <Route path="suppliers" element={<Suppliers />} />
-        <Route path="supplier-products" element={<SupplierProducts />} />
+        <Route path="supplier-products/:id" element={<SupplierProducts />} />
         <Route path="product-matching" element={<ProductMatching />} />
+        <Route path="/suppliers/:id/import" element={<SupplierImport />} />
       </Route>
     </Routes>
 

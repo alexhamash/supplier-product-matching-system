@@ -7,14 +7,14 @@ const products = [
         category: "iPhone"
     },
     {
-        id: 1,
+        id: 2,
         name: "iPhone 15",
         SKU: "MUPE3",
         brand: "Apple",
         category: "iPhone"
     },
     {
-        id: 1,
+        id: 3,
         name: "iPhone 16",
         SKU: "MQEC3",
         brand: "Apple",
