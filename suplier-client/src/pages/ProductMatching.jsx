@@ -1,172 +1,247 @@
-import React from 'react';
-import { Search, Filter, Play, RefreshCw, Layers } from "lucide-react";
+import React, { useState } from 'react';
+import { Search, Filter, Play, RefreshCw, Layers, CheckCircle2, XCircle, AlertCircle, SearchCode, ArrowRightLeft, Sparkles, PlusCircle } from "lucide-react";
 
 const ProductMatching = () => {
+  const [activeItem, setActiveItem] = useState(0);
+
+  const queue = [
+    { id: "SUP-APP-13-128-M", name: "Apple iPhone 13 128 Midnight", supplier: "TechCorp Inc.", brand: "Apple", category: "Smartphones" },
+    { id: "GLB-IPH13-BLK", name: "iPhone 13 128GB Black", supplier: "Global Supply Co.", brand: "Apple", category: "Phones" },
+    { id: "SM-S918B/DS", name: "Samsung Galaxy S23 Ultra 512GB Green", supplier: "TechCorp Inc.", brand: "Samsung", category: "Smartphones" },
+    { id: "ACC-S23U-GRN-512", name: "S23 Ultra Green 512G", supplier: "Accessories Pro", brand: "Samsung", category: "Mobile" },
+    { id: "WH1000XM5S.CE7", name: "Sony WH-1000XM5 Noise Cancelling Headphones Silver", supplier: "Global Supply Co.", brand: "Sony", category: "Audio" },
+  ];
+
   return (
-    <div className="w-full max-w-6xl mx-auto">
+    <div className="w-full h-full flex flex-col">
       {/* Header section */}
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex justify-between items-start mb-6 shrink-0">
         <div>
           <h1 className="text-[28px] font-bold text-[#0F172A] tracking-tight mb-1">Product Matching</h1>
-          <p className="text-[#64748B] text-[15px]">Map supplier inventory to your internal catalog.</p>
+          <p className="text-[#64748B] text-[15px]">Review unmatched supplier inventory and link them to your central catalog.</p>
         </div>
         <div className="flex items-center gap-3">
           <button className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
             <RefreshCw className="w-4 h-4" />
-            Refresh Rules
+            Refresh Queue
           </button>
-          <button className="bg-[#3B82F6] hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
-            <Play className="w-4 h-4" />
-            Run Auto-Match
+          <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
+            <Sparkles className="w-4 h-4" />
+            Auto-Match All (AI)
           </button>
         </div>
       </div>
 
       {/* Main Content Area - Split View */}
-      <div className="flex flex-col lg:flex-row gap-6">
+      <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
 
         {/* Left Side: Unmatched Queue */}
-        <div className="w-full lg:w-1/3 flex flex-col gap-4 h-[calc(100vh-220px)] bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-blue-500" />
-              Unmatched Queue
-            </h2>
-            <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">3,339</span>
+        <div className="w-full lg:w-[35%] flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-[calc(100vh-140px)]">
+          <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <Layers className="w-5 h-5 text-indigo-600" />
+              <h2 className="font-semibold text-slate-800">Unmatched Queue</h2>
+            </div>
+            <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-md">
+              {queue.length} Pending
+            </span>
           </div>
 
-          <div className="px-4 pb-2 pt-4">
+          <div className="p-4 border-b border-slate-100 shrink-0 bg-white">
             <div className="relative w-full">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-4 w-4 text-slate-400" />
               </div>
               <input
                 type="text"
-                placeholder="Search queue..."
-                className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200 focus:border-slate-300 transition-colors bg-slate-50/50"
+                placeholder="Search supplier products..."
+                className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors bg-slate-50"
               />
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3">
-             {/* Sample Queue Items */}
-             {[
-               { id: "SKU-T120", name: "Wireless Earbuds Pro", supplier: "TechCorp Inc." },
-               { id: "MKB-882", name: "Mechanical Keyboard", supplier: "Global Supply Co." },
-               { id: "MO-G305", name: "Gaming Mouse Black", supplier: "TechCorp Inc." },
-               { id: "USB-C-3M", name: "Type-C Charging Cable 3m", supplier: "Accessories Pro" },
-               { id: "HDMI-8K", name: "Premium HDMI Cable 2m", supplier: "Accessories Pro" },
-               { id: "SD-128G", name: "MicroSD Card 128GB", supplier: "Global Supply Co." },
-             ].map((item, i) => (
-                <div key={i} className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                  i === 0 ? 'bg-blue-50 border-blue-200 shadow-sm' : 'bg-white border-slate-200 hover:border-blue-300'
-                }`}>
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-sm font-semibold text-slate-900 leading-tight">{item.name}</p>
-                    <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{item.id}</span>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50/50">
+             {queue.map((item, i) => (
+                <div
+                  key={i}
+                  onClick={() => setActiveItem(i)}
+                  className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                    i === activeItem
+                      ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-500 shadow-sm'
+                      : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-sm'
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <p className={`text-sm font-semibold leading-snug line-clamp-2 pr-2 ${i === activeItem ? 'text-indigo-900' : 'text-slate-900'}`}>
+                      {item.name}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-500">{item.supplier}</p>
+                  <div className="flex items-center gap-2 text-xs text-slate-500 mb-1.5">
+                    <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 border border-slate-200">
+                      {item.id}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs mt-2">
+                    <span className="text-slate-600 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                      {item.supplier}
+                    </span>
+                    {i === 0 && <span className="text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">AI Suggested</span>}
+                  </div>
                 </div>
              ))}
           </div>
         </div>
 
         {/* Right Side: Matching Workspace */}
-        <div className="w-full lg:w-2/3 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col h-[calc(100vh-220px)]">
+        <div className="w-full lg:w-[65%] flex flex-col h-[calc(100vh-140px)]">
 
-          {/* Active Item Details */}
-          <div className="p-6 border-b border-slate-200 bg-slate-50/50">
-            <div className="flex items-start justify-between mb-4">
-               <div>
-                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mb-2">
-                    Active Item
-                 </span>
-                 <h2 className="text-2xl font-bold text-slate-900 leading-tight">Wireless Earbuds Pro</h2>
-                 <p className="text-sm text-slate-500 mt-1">Supplier: <span className="font-medium text-slate-700">TechCorp Inc.</span> | Supplier SKU: <span className="font-mono text-slate-700">SKU-T120</span></p>
-               </div>
-               <div className="text-right">
-                  <p className="text-lg font-bold text-slate-900">$45.00</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Cost Price</p>
-               </div>
+          {/* Active Supplier Product Details Panel */}
+          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mb-4 shrink-0">
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">1</span>
+              <h3 className="font-semibold text-slate-800 text-sm">Supplier Product to Match</h3>
             </div>
 
-            {/* Description/Specs snippet */}
-             <div className="bg-white border border-slate-200 rounded-lg p-3 text-sm text-slate-600 mt-4 leading-relaxed line-clamp-2">
-               Active noise cancelling wireless earbuds with charging case. 24h battery life, IPX4 water resistant, Bluetooth 5.2. Includes 3 sizes of silicone tips.
-             </div>
+            <div className="p-6 flex items-start gap-6 bg-white">
+              <div className="w-24 h-24 bg-slate-100 rounded-xl border border-slate-200 flex flex-col items-center justify-center shrink-0">
+                 <span className="text-sm font-bold text-slate-400">IMG</span>
+              </div>
+
+              <div className="flex-1">
+                 <div className="flex items-start justify-between mb-2">
+                   <h2 className="text-xl font-bold text-slate-900 leading-tight">Apple iPhone 13 128 Midnight</h2>
+                   <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200">
+                      Supplier: <strong className="ml-1">TechCorp Inc.</strong>
+                   </span>
+                 </div>
+
+                 <div className="grid grid-cols-3 gap-4 mt-4">
+                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Supplier SKU</p>
+                      <p className="text-sm font-mono font-medium text-slate-800">SUP-APP-13-128-M</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Brand</p>
+                      <p className="text-sm font-medium text-slate-800">Apple</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Category</p>
+                      <p className="text-sm font-medium text-slate-800">Smartphones</p>
+                    </div>
+                 </div>
+              </div>
+            </div>
           </div>
 
-          {/* Catalog Search & Suggestions */}
-          <div className="p-6 flex-1 flex flex-col">
-            <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-4">Search Internal Catalog</h3>
-
-            <div className="relative w-full mb-6">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-slate-400" />
+          {/* Catalog Search & Suggestions Panel */}
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">2</span>
+                <h3 className="font-semibold text-slate-800 text-sm">Select Main Product from Catalog</h3>
               </div>
-              <input
-                type="text"
-                placeholder="Search catalog by product name, SKU, or UPC..."
-                className="block w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors shadow-sm"
-              />
-              <button className="absolute inset-y-1 right-1 bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1 rounded-lg text-sm font-medium transition-colors">
-                <Filter className="w-4 h-4" />
+
+              <button className="text-indigo-600 hover:text-indigo-700 text-sm font-medium flex items-center gap-1.5 transition-colors">
+                <PlusCircle className="w-4 h-4" />
+                Create New Main Product
               </button>
             </div>
 
-            <h4 className="text-sm font-medium text-slate-500 mb-3">AI Suggestions (2)</h4>
-
-            <div className="space-y-3 flex-1 overflow-y-auto pr-2">
-              {/* Suggestion 1 */}
-              <div className="border border-green-200 bg-green-50/30 rounded-xl p-4 flex items-center justify-between hover:shadow-sm transition-shadow">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white rounded-lg border border-slate-200 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-bold text-slate-400">IMG</span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h5 className="font-bold text-slate-900">SoundCore Pro Wireless Earbuds</h5>
-                      <span className="bg-green-100 text-green-700 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-wide">98% Match</span>
-                    </div>
-                    <div className="flex gap-4 text-xs text-slate-500">
-                      <span className="font-mono">SKU: INT-EP01</span>
-                      <span>Category: Audio & Headphones</span>
-                    </div>
-                  </div>
+            <div className="p-5 border-b border-slate-100 bg-white shrink-0">
+              <div className="relative w-full">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                  <SearchCode className="h-5 w-5 text-slate-400" />
                 </div>
-                <button className="bg-white border border-slate-300 hover:border-blue-500 hover:text-blue-600 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm">
-                  Match Product
-                </button>
-              </div>
-
-               {/* Suggestion 2 */}
-               <div className="border border-slate-200 rounded-xl p-4 flex items-center justify-between hover:shadow-sm transition-shadow">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center flex-shrink-0">
-                     <span className="text-xs font-bold text-slate-400">IMG</span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h5 className="font-semibold text-slate-800">Basic Wireless Earphones</h5>
-                      <span className="bg-amber-100 text-amber-700 text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-wide">65% Match</span>
-                    </div>
-                    <div className="flex gap-4 text-xs text-slate-500">
-                      <span className="font-mono">SKU: INT-EB99</span>
-                      <span>Category: Audio & Headphones</span>
-                    </div>
-                  </div>
-                </div>
-                <button className="bg-white border border-slate-300 hover:border-blue-500 hover:text-blue-600 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm">
-                  Match Product
-                </button>
+                <input
+                  type="text"
+                  placeholder="Search internal catalog by product name, Main SKU, or brand..."
+                  className="block w-full pl-11 pr-4 py-3 border border-slate-300 rounded-xl text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors shadow-sm"
+                  defaultValue="iPhone 13 128"
+                />
               </div>
             </div>
 
-            <div className="pt-4 border-t border-slate-200 flex justify-between items-center mt-4">
-              <button className="text-slate-500 hover:text-slate-700 text-sm font-medium px-2 py-1">Skip Item</button>
-              <button className="text-blue-600 hover:text-blue-800 text-sm font-medium px-2 py-1">Create New Product in Catalog</button>
-            </div>
+            <div className="flex-1 overflow-y-auto bg-slate-50/30 p-5">
+              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                AI Suggested Matches
+              </h4>
 
+              <div className="space-y-4">
+                {/* High Confidence Suggestion */}
+                <div className="border border-emerald-200 bg-emerald-50/40 rounded-xl p-5 hover:shadow-md transition-all relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-3 py-1 rounded-bl-lg border-b border-l border-emerald-200 uppercase tracking-wide">
+                    98% Match (Name & Brand)
+                  </div>
+
+                  <div className="flex items-start gap-5">
+                    <div className="w-16 h-16 bg-white rounded-lg border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-sm">
+                      <span className="text-xs font-bold text-slate-400">IMG</span>
+                    </div>
+
+                    <div className="flex-1">
+                      <h5 className="text-lg font-bold text-slate-900 mb-1">iPhone 13 128GB Midnight</h5>
+                      <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-600 mb-4">
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-slate-400">Main SKU:</span>
+                          <span className="font-mono font-medium text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200">IPH-13-128-MDN</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-slate-400">Brand:</span>
+                          <span className="font-medium text-slate-800">Apple</span>
+                        </span>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold transition-all shadow-sm flex items-center justify-center gap-2">
+                          <CheckCircle2 className="w-4 h-4" />
+                          Confirm Match
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                 {/* Lower Confidence Suggestion */}
+                 <div className="border border-slate-200 bg-white rounded-xl p-5 hover:border-indigo-300 hover:shadow-md transition-all relative group">
+                  <div className="absolute top-0 right-0 bg-slate-100 text-slate-600 text-[10px] font-bold px-3 py-1 rounded-bl-lg border-b border-l border-slate-200 uppercase tracking-wide">
+                    65% Match (Category)
+                  </div>
+
+                  <div className="flex items-start gap-5">
+                    <div className="w-16 h-16 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center flex-shrink-0">
+                       <span className="text-xs font-bold text-slate-400">IMG</span>
+                    </div>
+
+                    <div className="flex-1">
+                      <h5 className="text-base font-semibold text-slate-800 mb-1">iPhone 13 256GB Midnight</h5>
+                      <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-500 mb-4">
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-slate-400">Main SKU:</span>
+                          <span className="font-mono text-slate-700 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">IPH-13-256-MDN</span>
+                        </span>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button className="flex-1 bg-white border border-slate-300 hover:border-indigo-500 hover:text-indigo-600 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm">
+                          Select This Match
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Footer */}
+              <div className="mt-8 flex items-center justify-center border-t border-slate-200 pt-6">
+                <button className="text-slate-500 hover:text-slate-800 text-sm font-medium flex items-center gap-2 transition-colors px-4 py-2 rounded-lg hover:bg-slate-100">
+                  <XCircle className="w-4 h-4" />
+                  Reject & Mark as Unmatchable
+                </button>
+              </div>
+
+            </div>
           </div>
         </div>
       </div>
