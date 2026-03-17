@@ -21,44 +21,41 @@ const SupplierProducts = () => {
   const [supplierName, setSupplierName] = useState("Supplier");
 
   useEffect(() => {
-  const allSuppliers = getSuppliers(); // Отримуємо список усіх постачальників [ {id: 1, name: '...'}, {id: 2, ...} ]
-  let aggregatedProducts = [];
+    const allSuppliers = getSuppliers(); // Отримуємо список усіх постачальників [ {id: 1, name: '...'}, {id: 2, ...} ]
+    let allProducts = [];
 
-  allSuppliers.forEach(supplier => {
-    const key = `supplier_products_${supplier.id}`;
-    const savedData = localStorage.getItem(key);
-    
-    if (savedData) {
-      const parsedData = JSON.parse(savedData);
-      if (Array.isArray(parsedData)) {
-        // Додаємо до кожного товару ім'я постачальника, щоб ми знали чий він
-        const productsWithOwner = parsedData.map(p => ({
-          ...p,
-          supplierName: supplier.name 
-        }));
-        aggregatedProducts = [...aggregatedProducts, ...productsWithOwner];
+    allSuppliers.forEach((supplier) => {
+      const key = `supplier_products_${supplier.id}`;
+      const savedData = localStorage.getItem(key);
+
+      if (savedData) {
+        const parsedData = JSON.parse(savedData);
+        if (Array.isArray(parsedData)) {
+          const productsWithBrand = parsedData.map(item => ({
+            ...item,
+            supplierName: supplier.name,
+          }));
+          allProducts = [...allProducts, ...productsWithBrand ]
+        }
       }
-    }
-  });
-
-  setProducts(aggregatedProducts);
-}, []); // Виконується один раз при завантаженні сторінки
-   
+    });
+    setProducts(allProducts);
+  }, []); // Виконується один раз при завантаженні сторінки
 
   // Фільтрація списку в реальному часі
   const filteredProducts = products.filter(
     (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.supplierSku.toLowerCase().includes(searchTerm.toLowerCase()),
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.supplierSku?.toLowerCase() || "").includes(searchTerm.toLowerCase()) // Додай ?. та порожній рядок
   );
-
+  
   return (
     <div className="w-full">
       {/* Header section */}
       <div className="flex justify-between items-start mb-6">
         <div>
           <h1 className="text-[28px] font-bold text-[#0F172A] tracking-tight mb-1">
-            Products 
+            Supplier Products 
           </h1>
           <p className="text-[#64748B] text-[15px]">
             View imported inventory and their matches to your main catalog.
@@ -161,7 +158,7 @@ const SupplierProducts = () => {
               {/* 4. Action / Link */}
               <div className="col-span-4">
                 <button className="w-full text-center py-2 px-3 border border-slate-300 border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-colors font-medium">
-                  Find Match 
+                  Find Match
                 </button>
               </div>
             </div>

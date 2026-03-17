@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import { Outlet, NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -9,7 +9,7 @@ import {
   Bell,
   Search,
   Share2,
-  Database
+  Database,
 } from "lucide-react";
 
 const MainLayout = () => {
@@ -23,18 +23,24 @@ const MainLayout = () => {
             <div className="bg-[#2563EB] p-1.5 rounded-lg">
               <Share2 className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-slate-900 tracking-tight">SyncMatch</span>
+            <span className="text-xl font-bold text-slate-900 tracking-tight">
+              SyncMatch
+            </span>
           </div>
 
           {/* Navigation */}
           <div className="px-4">
-            <p className="text-xs font-semibold text-slate-400 mb-4 px-2 tracking-wider">MENU</p>
+            <p className="text-xs font-semibold text-slate-400 mb-4 px-2 tracking-wider">
+              MENU
+            </p>
             <nav className="space-y-1">
               <NavLink
                 to="/"
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive ? 'bg-[#EFF6FF] text-[#2563EB]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    isActive
+                      ? "bg-[#EFF6FF] text-[#2563EB]"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   }`
                 }
               >
@@ -45,7 +51,9 @@ const MainLayout = () => {
                 to="/suppliers"
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive ? 'bg-[#EFF6FF] text-[#2563EB]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    isActive
+                      ? "bg-[#EFF6FF] text-[#2563EB]"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   }`
                 }
               >
@@ -56,7 +64,9 @@ const MainLayout = () => {
                 to="/main-products"
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive ? 'bg-[#EFF6FF] text-[#2563EB]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    isActive
+                      ? "bg-[#EFF6FF] text-[#2563EB]"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   }`
                 }
               >
@@ -67,7 +77,9 @@ const MainLayout = () => {
                 to="/suppliers-products"
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive ? 'bg-[#EFF6FF] text-[#2563EB]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    isActive
+                      ? "bg-[#EFF6FF] text-[#2563EB]"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   }`
                 }
               >
@@ -78,7 +90,9 @@ const MainLayout = () => {
                 to="/product-matching"
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive ? 'bg-[#EFF6FF] text-[#2563EB]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    isActive
+                      ? "bg-[#EFF6FF] text-[#2563EB]"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   }`
                 }
               >
@@ -95,7 +109,9 @@ const MainLayout = () => {
             to="/settings"
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive ? 'bg-[#EFF6FF] text-[#2563EB]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                isActive
+                  ? "bg-[#EFF6FF] text-[#2563EB]"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
               }`
             }
           >
@@ -136,6 +152,6 @@ const MainLayout = () => {
       </main>
     </div>
   );
-}
+};
 
 export default MainLayout;

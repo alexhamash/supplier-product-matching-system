@@ -13,6 +13,8 @@ const MainProducts = () => {
   });
   const [isFormVisible, setIsFormVisible] = useState(false);
 
+  const [editingProductId, setEditingProductId] = useState(null);
+
   // 1. ПЕРШИЙ: Ініціалізація (тільки при завантаженні сторінки)
   useEffect(() => {
     // Прибираємо пробіл у назві ключа!
@@ -51,22 +53,36 @@ const MainProducts = () => {
     }
 
     if (formData.SKU.trim()) {
-      const isDuplicate = products.some((p) => p.SKU === formData.SKU.trim());
+      const isDuplicate = products.some((p) => 
+        p.SKU === formData.SKU.trim() && p.id !== editingProductId) 
       if (isDuplicate) {
         alert("Товар з таким SKU вже існує!");
         return;
       }
     }
 
-    const newProduct = {
-      ...formData,
-      id: products.length + 1,
-      linkedCount: 0, // Використовуємо linkedCount, бо так прописано у верстці нижче
-    };
-
-    setProducts([...products, newProduct]);
+    if (editingProductId) {
+      const updatedProduct = products.map((item) => {
+        item.id = editingProductId ? { ...item, ...formData } : item;
+      });
+      setProducts(updatedProduct);
+      setEditingProductId(null);
+    } else {
+      const newProduct = {
+        ...formData,
+        id: Date.now(),
+        linkedCount: 0, // Використовуємо linkedCount, бо так прописано у верстці нижче
+      };
+      setProducts([...products, newProduct]);
+    }
     setIsFormVisible(false);
     setFormData({ name: "", SKU: "", brand: "", category: "" });
+  };
+
+  const handleEdit = (product) => {
+    setFormData({ name: product.name, SKU: product.SKU });
+    setEditingProductId(product.id);
+    setIsFormVisible(true);
   };
 
   return (
@@ -94,7 +110,7 @@ const MainProducts = () => {
       {isFormVisible && (
         <div className="bg-slate-50 border border-blue-200 rounded-xl p-6 mb-6">
           <h3 className="text-lg font-bold mb-4 text-slate-900">
-            Add New Product
+            {editingProductId ? "Edit Product" : "Add New Product"}
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <input
@@ -127,13 +143,12 @@ const MainProducts = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            value={searchTerm} // ВИПРАВЛЕНО: додаємо прив'язку
+            value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by name or SKU..."
             className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-blue-500"
           />
         </div>
-        {/* ... тут твої селектори ... */}
       </div>
 
       {/* Data table */}
@@ -179,7 +194,10 @@ const MainProducts = () => {
                 </span>
               </div>
               <div className="col-span-1 text-right">
-                <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                <button
+                  onClick={() => handleEdit(product)}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                >
                   Edit
                 </button>
               </div>
