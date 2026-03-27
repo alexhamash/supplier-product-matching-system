@@ -15,21 +15,17 @@ const MainProducts = () => {
 
   const [editingProductId, setEditingProductId] = useState(null);
 
-  // 1. ПЕРШИЙ: Ініціалізація (тільки при завантаженні сторінки)
   useEffect(() => {
-    // Прибираємо пробіл у назві ключа!
     const savedProducts = localStorage.getItem("main_products");
 
     if (savedProducts) {
       setProducts(JSON.parse(savedProducts));
     } else {
-      // Якщо в localStorage порожньо, беремо початкові дані з сервісу
       const data = getMainProducts();
       setProducts(data);
     }
   }, []); // Виконується 1 раз
 
-  // 2. ДРУГИЙ: Синхронізація (кожного разу, коли міняється products)
   useEffect(() => {
     localStorage.setItem("main_products", JSON.stringify(products));
   }, [products]); // Виконується при кожній зміні списку
@@ -40,7 +36,6 @@ const MainProducts = () => {
       product.SKU.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  // Функція для оновлення полів форми
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -71,7 +66,7 @@ const MainProducts = () => {
       const newProduct = {
         ...formData,
         id: Date.now(),
-        linkedCount: 0, // Використовуємо linkedCount, бо так прописано у верстці нижче
+        linkedCount: 0,
       };
       setProducts([...products, newProduct]);
     }
