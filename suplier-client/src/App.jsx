@@ -17,6 +17,7 @@ function App() {
         <Route path="product-matching" element={<ProductMatching />} />
         <Route path="main-products" element={<MainProducts />} />
         <Route path="suppliers/:id/import" element={<SupplierImport />} />
+        <Route path="/matching" element={<ProductMatching />} />
       </Route>
     </Routes>
 
