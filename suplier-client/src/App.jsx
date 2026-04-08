@@ -1,4 +1,5 @@
 import { Routes, Route } from "react-router-dom"
+import { Toaster } from 'react-hot-toast';
 import MainLayout from "./layout/MainLayout"
 import Dashboard from "./pages/Dashboard"
 import Suppliers from "./pages/Suppliers"
@@ -6,9 +7,13 @@ import SupplierProducts from "./pages/SupplierProducts"
 import ProductMatching from "./pages/ProductMatching"
 import MainProducts from "./pages/MainProducts"
 import SupplierImport from "./pages/SupplierImport"
+
  
 function App() {
   return (
+    <>
+    <Toaster position="top-right" />
+
     <Routes>
       <Route path="/" element={<MainLayout />}>
         <Route index element={<Dashboard />} />
@@ -20,8 +25,8 @@ function App() {
         <Route path="/matching" element={<ProductMatching />} />
       </Route>
     </Routes>
-
-  
+    </>
+    
   )
 }
 

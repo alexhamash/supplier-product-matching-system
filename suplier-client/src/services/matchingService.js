@@ -19,3 +19,19 @@ export const getSupplierSuggestions = (selectedProduct, allSuppliers) => {
     .filter(item => item.confidence > 5) // мінімальний поріг
     .sort((a, b) => b.confidence - a.confidence);
 };
+
+export const createMatch = (mainProductId, supplierProductId, supplierId) => {
+  const key = `supplier_products_${supplierId}`;
+  const products = JSON.parse(localStorage.getItem(key) || "[]")
+
+  const updatedProducts = products.map(p => {
+    if (p.id === supplierProductId) {
+      return {...p, status: "matched", mainProductId: mainProductId}
+    } 
+    return p;
+  })
+
+  localStorage.setItem(key, JSON.stringify(updatedProducts));
+
+  return updatedProducts
+}
