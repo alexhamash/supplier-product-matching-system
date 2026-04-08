@@ -10,7 +10,7 @@ import {
   AlertTriangle,
   Package,
 } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { getSuppliers } from "../services/supplierService"; // Додав імпорт сервісу
 
 const SupplierProducts = () => {
@@ -19,6 +19,7 @@ const SupplierProducts = () => {
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [supplierName, setSupplierName] = useState("Supplier");
+  const [statusFilter, setStatusFilter] = useState("All Statuses");
 
   useEffect(() => {
     const allSuppliers = getSuppliers(); // Отримуємо список усіх постачальників [ {id: 1, name: '...'}, {id: 2, ...} ]
@@ -40,15 +41,25 @@ const SupplierProducts = () => {
       }
     });
     setProducts(allProducts);
-  }, []); // Виконується один раз при завантаженні сторінки
+  }, []); 
 
-  // Фільтрація списку в реальному часі
-  const filteredProducts = products.filter(
-    (p) =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.supplierSku?.toLowerCase() || "").includes(searchTerm.toLowerCase()) // Додай ?. та порожній рядок
-  );
-  
+
+  const filteredProducts = products.filter((p) => {
+    const nameMatch = (p.name || "").toLowerCase().includes(searchTerm.toLowerCase());
+    const skuMatch = (p.supplierSku || "").toLowerCase().includes(searchTerm.toLowerCase());
+
+    const currentStatus = (p.status || "unmatched").toLowerCase();
+    const targetFilter = statusFilter.toLowerCase();
+
+    const statusMatch =
+      statusFilter === "All Statuses" ||
+      currentStatus === targetFilter
+
+    return (nameMatch || skuMatch) && statusMatch
+  })
+    
+  const navigate = useNavigate()
+
   return (
     <div className="w-full">
       {/* Header section */}
@@ -88,7 +99,10 @@ const SupplierProducts = () => {
           </div>
 
           <div className="relative w-full sm:w-[160px]">
-            <select className="block w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-sm appearance-none bg-white cursor-pointer text-slate-700">
+            <select 
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="block w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-sm appearance-none bg-white cursor-pointer text-slate-700">
               <option>All Statuses</option>
               <option>Matched</option>
               <option>Unmatched</option>
@@ -157,9 +171,11 @@ const SupplierProducts = () => {
 
               {/* 4. Action / Link */}
               <div className="col-span-4">
-                <button className="w-full text-center py-2 px-3 border border-slate-300 border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-colors font-medium">
+                <button 
+                onClick={() => navigate(`/matching?supplierProductId=${products.id}`)}
+                className="w-full text-center py-2 px-3 border border-slate-300 border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-colors font-medium">
                   Find Match
-                </button>
+                </button> 
               </div>
             </div>
           ))}

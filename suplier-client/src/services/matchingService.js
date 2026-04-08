@@ -14,7 +14,7 @@ export const getSupplierSuggestions = (selectedProduct, allSuppliers) => {
   return allSuppliers
     .map(sp => ({
       ...sp,
-      confidence: calculateScore(selectedProduct.name, sp.originalName)
+      confidence: calculateScore(selectedProduct.name, sp.name)
     }))
     .filter(item => item.confidence > 5) // мінімальний поріг
     .sort((a, b) => b.confidence - a.confidence);

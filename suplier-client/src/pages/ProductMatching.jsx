@@ -1,15 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  Search,
-  Plus,
-  Sparkles,
-  Database,
-  CheckCircle2,
-  Layers,
-  XCircle,
-  SearchCode,
-  Package,
-  PlusCircle,
+import {Search,Plus,Sparkles,Database,CheckCircle2,Layers, XCircle,SearchCode,Package, PlusCircle,
 } from "lucide-react";
 import { getMainProducts } from "../services/mainProductService";
 import {
@@ -260,7 +250,7 @@ const ProductMatching = () => {
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
                             <h5 className="text-lg font-bold text-slate-900">
-                              {item.originalName}
+                              {item.name}
                             </h5>
                             <span className="text-emerald-600 font-bold text-lg">
                               ${item.price}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getSuppliers } from "../services/supplierService";
+import { getSuppliers, importSupplierData } from "../services/supplierService";
 import { ArrowLeft, RefreshCw, CheckCircle } from "lucide-react";
 
 const SupplierImport = () => {
@@ -21,34 +21,18 @@ const SupplierImport = () => {
   // 2. Функція імітації імпорту
   const handleStartImport = () => {
     setIsImporting(true);
-    // Імітуємо затримку 2 секунди
-    setTimeout(() => {
-      // Тут ми генеруємо "фейкові" товари
-      const fakeProducts = [
-        {
-          id: Date.now(),
-          name: "iPhone 15 Pro",
-          supplierSku: "IPH15-PRO-G",
-          price: 999,
-        },
-        {
-          id: Date.now() + 1,
-          name: "AirPods Max",
-          supplierSku: "AP-MAX-W",
-          price: 549,
-        },
-      ];
 
-      // 3. Збережи ці товари в localStorage під ключем `supplier_products_${id}`
-      localStorage.setItem(
-        `supplier_products_${id}`,
-        JSON.stringify(fakeProducts),
-      );
+    importSupplierData(parseInt(id))
+      .then((result) => {
+        setImportResult(result)
+        setIsImporting(false)
+      })
+      .catch((error) => {
+        console.error("Import Failed", error)
+        setIsImporting(false)
+      })
+  }
 
-      setIsImporting(false);
-      setImportResult({ count: fakeProducts.length });
-    }, 2000);
-  };
 
   if (!supplier) return <div className="p-10">Loading...</div>;
 

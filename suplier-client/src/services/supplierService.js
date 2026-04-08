@@ -22,11 +22,10 @@ const suppliers = [
 export const getSuppliers = () => suppliers;
 
 export const getSupplierProducts = (supplierId) => {
-  // Повертаємо тільки ті товари, що належать вибраному постачальнику
-  return supplierProducts.filter((p) => p.supplierId === supplierId);
-};
+  const localData = localStorage.getItem(`supplier_products_${supplierId}`) 
+  return localData ? JSON.parse(localData) : [];
+}
 
-// Функція для встановлення або розірвання зв'язку (US 9)
 export const linkProduct = (supplierProductId, mainProductId) => {
   // В реальності тут буде API запит до бази даних
   const product = supplierProducts.find((p) => p.id === supplierProductId);
@@ -37,46 +36,16 @@ export const linkProduct = (supplierProductId, mainProductId) => {
   return { success: false };
 };
 
-// Імітація імпорту (US 5 & US 6)
 export const importSupplierData = (supplierId) => {
-  return new Promise((resolve, reject) => {
-    const supplier = suppliers.find((s) => s.id === supplierId);
-    if (!supplier) return reject("Supplier not found");
-
-    supplier.status = "In Progress"; // Встановлюємо статус згідно US 6
-
-    // Імітуємо затримку мережі
+  return new Promise((resolve) => {
     setTimeout(() => {
-      // Емуляція успіху або помилки (Edge Case: network failure)
-      const isSuccess = Math.random() > 0.1;
-
-      if (isSuccess) {
-        // Додаємо фейкові товари для цього постачальника
-        const newProducts = [
-          {
-            id: Date.now(),
-            supplierId,
-            originalName: "IPH 16 Blk",
-            price: 900,
-            mainProductId: null,
-          },
-          {
-            id: Date.now() + 1,
-            supplierId,
-            originalName: "iPhone 16 128GB Black",
-            price: 910,
-            mainProductId: null,
-          },
-        ];
-
-        supplierProducts = [...supplierProducts, ...newProducts];
-        supplier.productsCount = newProducts.length;
-        supplier.status = "Success";
-        resolve({ message: "Import completed", count: newProducts.length });
-      } else {
-        supplier.status = "Failed";
-        reject("Row 45: Missing mandatory field"); // Лог помилки згідно US 6
-      }
-    }, 2000); // 2 секунди "завантаження"
+      const fakeProducts = [
+        { id: Date.now(), name: "iPhone 15 Pro", supplierSku: "IPH15-PRO-G", price: 999, supplierId },
+        { id: Date.now() + 1, name: "AirPods Max", supplierSku: "AP-MAX-W", price: 549, supplierId }
+      ];
+      // Зберігаємо в localStorage для синхронізації між сторінками
+      localStorage.setItem(`supplier_products_${supplierId}`, JSON.stringify(fakeProducts));
+      resolve({ count: fakeProducts.length });
+    }, 200);
   });
 };
