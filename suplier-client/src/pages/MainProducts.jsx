@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Search, Filter, Plus, Package, ChevronDown } from "lucide-react";
-import { getMainProducts } from "../services/mainProductService";
+import { getMainProducts, saveMainProducts } from "../services/mainProductService";
 
 const MainProducts = () => {
   const [products, setProducts] = useState([]);
@@ -15,24 +15,16 @@ const MainProducts = () => {
 
   const [editingProductId, setEditingProductId] = useState(null);
 
-  // 1. ПЕРШИЙ: Ініціалізація (тільки при завантаженні сторінки)
   useEffect(() => {
-    // Прибираємо пробіл у назві ключа!
     const savedProducts = localStorage.getItem("main_products");
 
     if (savedProducts) {
       setProducts(JSON.parse(savedProducts));
     } else {
-      // Якщо в localStorage порожньо, беремо початкові дані з сервісу
       const data = getMainProducts();
       setProducts(data);
     }
   }, []); // Виконується 1 раз
-
-  // 2. ДРУГИЙ: Синхронізація (кожного разу, коли міняється products)
-  useEffect(() => {
-    localStorage.setItem("main_products", JSON.stringify(products));
-  }, [products]); // Виконується при кожній зміні списку
 
   const filteredProducts = products.filter(
     (product) =>
@@ -40,7 +32,6 @@ const MainProducts = () => {
       product.SKU.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  // Функція для оновлення полів форми
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -62,20 +53,19 @@ const MainProducts = () => {
     }
 
     if (editingProductId) {
-      const updatedProduct = products.map((item) => {
+      const updatedProducts = products.map((item) => {
         item.id = editingProductId ? { ...item, ...formData } : item;
       });
-      setProducts(updatedProduct);
-      setEditingProductId(null);
+      setProducts(updatedProducts);
+      localStorage.setItem("main_products", JSON.stringify(updatedProducts));
     } else {
-      const newProduct = {
-        ...formData,
-        id: Date.now(),
-        linkedCount: 0, // Використовуємо linkedCount, бо так прописано у верстці нижче
-      };
-      setProducts([...products, newProduct]);
+      const updatedList = saveMainProducts(formData)
+
+      setProducts(updatedList)
     }
+
     setIsFormVisible(false);
+    setEditingProductId(null);
     setFormData({ name: "", SKU: "", brand: "", category: "" });
   };
 
