@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Search, Filter, Plus, Package, ChevronDown } from "lucide-react";
-import { getMainProducts } from "../services/mainProductService";
+import { getMainProducts, saveMainProducts } from "../services/mainProductService";
 
 const MainProducts = () => {
   const [products, setProducts] = useState([]);
@@ -25,10 +25,6 @@ const MainProducts = () => {
       setProducts(data);
     }
   }, []); // Виконується 1 раз
-
-  useEffect(() => {
-    localStorage.setItem("main_products", JSON.stringify(products));
-  }, [products]); // Виконується при кожній зміні списку
 
   const filteredProducts = products.filter(
     (product) =>
@@ -57,20 +53,19 @@ const MainProducts = () => {
     }
 
     if (editingProductId) {
-      const updatedProduct = products.map((item) => {
+      const updatedProducts = products.map((item) => {
         item.id = editingProductId ? { ...item, ...formData } : item;
       });
-      setProducts(updatedProduct);
-      setEditingProductId(null);
+      setProducts(updatedProducts);
+      localStorage.setItem("main_products", JSON.stringify(updatedProducts));
     } else {
-      const newProduct = {
-        ...formData,
-        id: Date.now(),
-        linkedCount: 0,
-      };
-      setProducts([...products, newProduct]);
+      const updatedList = saveMainProducts(formData)
+
+      setProducts(updatedList)
     }
+
     setIsFormVisible(false);
+    setEditingProductId(null);
     setFormData({ name: "", SKU: "", brand: "", category: "" });
   };
 
