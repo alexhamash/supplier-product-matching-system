@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'main_products'
 
 const defaultProducts = [
-    { id: 1, name: "iPhone 17", SKU: "MXVC3", brand: "Apple", category: "iPhone" },
-    { id: 2, name: "iPhone 15", SKU: "MUPE3", brand: "Apple", category: "iPhone" },
-    { id: 3, name: "iPhone 16", SKU: "MQEC3", brand: "Apple", category: "iPhone" },
-    { id: 4, name: "AirPods Max Blue", SKU: "MQNMV", brand: "Apple", category: "AirPods" },
+    { id: 1, name: "iPhone 17", SKU: "MXVC3", brand: "Apple", category: "iPhone", linkedCount: 0},
+    { id: 2, name: "iPhone 15", SKU: "MUPE3", brand: "Apple", category: "iPhone", linkedCount: 0 },
+    { id: 3, name: "iPhone 16", SKU: "MQEC3", brand: "Apple", category: "iPhone", linkedCount: 0 },
+    { id: 4, name: "AirPods Max Blue", SKU: "MQNMV", brand: "Apple", category: "AirPods", linkedCount: 0 },
 
 ];
 

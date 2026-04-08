@@ -6,8 +6,8 @@ import {
   getSupplierProducts,
   importSupplierData,
 } from "../services/supplierService";
-
-import { getSupplierSuggestions } from '../services/matchingService';
+import toast from 'react-hot-toast';
+import { createMatch, getSupplierSuggestions } from '../services/matchingService';
 
 const ProductMatching = () => {
   const [mainProducts, setMainProducts] = useState([]);
@@ -26,13 +26,36 @@ const ProductMatching = () => {
 
   const selectedProduct = mainProducts[activeItem] || null;
 
-  const suggestions = getSupplierSuggestions(selectedProduct, allSupplierProducts);
+  const suggestions = getSupplierSuggestions(selectedProduct, allSupplierProducts).filter(p => p.status != 'matched');
 
-  // const suggestions = allSupplierProducts.filter((item) =>
-  //   item.originalName
-  //     .toLowerCase()
-  //     .includes(selectedProduct?.brand?.toLowerCase()),
-  // );
+  const handleLink = (supplierProduct) => {
+    const sId = supplierProduct.supplierId || 1;
+    createMatch(selectedProduct.id, supplierProduct.id, sId);
+
+    setAllSupplierProducts(prev => prev.map(p =>
+      p.id === supplierProduct.id ? { ...p, status: "matched", mainProducts: selectedProduct.id } : p
+    ))
+
+    setMainProducts(prev => prev.map(p => 
+    p.id === selectedProduct.id ? { ...p, linkedCount: (p.linkedCount || 0) + 1 } : p
+  ));
+
+  toast.success(`Зв'язано: ${supplierProduct.name}`, {
+    duration: 4000,
+    style: {
+      border: '1px solid #10B981',
+      padding: '16px',
+      color: '#064E3B',
+      background: '#ECFDF5',
+      fontWeight: '600',
+      borderRadius: '12px',
+    },
+    iconTheme: {
+      primary: '#10B981',
+      secondary: '#FFFAEE',
+    },
+  });
+};
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -121,7 +144,7 @@ const ProductMatching = () => {
                         : "bg-amber-50 text-amber-600 border-amber-100"
                     }`}
                   >
-                    {item.linkedCount} Linked
+                    {item.linkedCount || 0} Linked
                   </span>
                 </div>
               </div>
@@ -257,7 +280,9 @@ const ProductMatching = () => {
                             </span>
                           </div>
                           <div className="flex gap-3 mt-4">
-                            <button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-colors">
+                            <button 
+                            onClick={() => handleLink(item)}
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-colors">
                               <CheckCircle2 className="w-4 h-4" />
                               Link to Main Product
                             </button>
