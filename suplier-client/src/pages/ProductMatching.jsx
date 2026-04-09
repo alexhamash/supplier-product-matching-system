@@ -29,6 +29,9 @@ const ProductMatching = () => {
 
   const [showLinked, setShowLinked] = useState(false);
 
+  const [searchTerm, setSearchTearm] = useState("")
+  const [filterStatus, setFilterStatus] = useState("all")
+
   useEffect(() => {
     const data = getMainProducts();
     setMainProducts(data);
@@ -116,6 +119,20 @@ const ProductMatching = () => {
   toast.error(`Зв'язок розірвано: ${supplierProduct.name}`);
 };
 
+
+  const filteredMainProducts = mainProducts.filter(product => {
+    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          product.SKU.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    const matchesStatus = filterStatus === "all"
+      ? true
+      : filterStatus === "linked"
+        ? product.linkedCount > 0
+        : (product.linkedCount || 0) === 0
+
+    return matchesSearch && matchesStatus
+   })
+
   return (
     <div className="w-full h-full flex flex-col">
       {/* Header section */}
@@ -163,13 +180,30 @@ const ProductMatching = () => {
               <input
                 type="text"
                 placeholder="Search main products..."
+                value={searchTerm}
+                onChange={(e) => setSearchTearm(e.target.value)}
                 className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors bg-slate-50"
               />
+            </div>
+            <div className="flex gap-1.5 p-1 bg-slate-100 rounded-lg">
+              {['all', 'unlinked', 'linked'].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilterStatus(status)}
+                  className={`flex-1 text-[10px] uppercase tracking-wider font-bold py-1.5 rounded-md transition-all ${
+                    filterStatus === status 
+                      ? 'bg-white text-indigo-600 shadow-sm' 
+                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                  }`}
+                >
+                  {status === 'all' ? 'All' : status === 'unlinked' ? 'Unlinked' : 'Linked'}
+                </button>
+              ))}
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50/50">
-            {mainProducts.map((item, index) => (
+            {filteredMainProducts.map((item, index) => (
               <div
                 key={item.id}
                 onClick={() => setActiveItem(index)}
