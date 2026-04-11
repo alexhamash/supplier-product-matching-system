@@ -22,6 +22,9 @@ import {
   getSupplierSuggestions,
 } from "../services/matchingService";
 
+import { useSearchParams } from "react-router-dom";
+
+
 const ProductMatching = () => {
   const [mainProducts, setMainProducts] = useState([]);
   const [activeItem, setActiveItem] = useState(0);
@@ -31,6 +34,10 @@ const ProductMatching = () => {
 
   const [searchTerm, setSearchTearm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
+
+  const [searchParams] = useSearchParams();
+  const targetSupplierId = searchParams.get("supplierProductId")
+  
 
   useEffect(() => {
     const data = getMainProducts();

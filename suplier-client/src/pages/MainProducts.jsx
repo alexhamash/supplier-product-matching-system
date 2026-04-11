@@ -88,7 +88,7 @@ const MainProducts = () => {
           </p>
         </div>
         <button
-          onClick={() => setIsFormVisible(!isFormVisible)} // ВИПРАВЛЕНО: було !is
+          onClick={() => setIsFormVisible(!isFormVisible)} 
           className="bg-[#3B82F6] hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -104,7 +104,7 @@ const MainProducts = () => {
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <input
-              name="name" // Додаємо name для handleInputChange
+              name="name" 
               value={formData.name}
               onChange={handleInputChange}
               className="p-2 border border-slate-200 rounded-lg text-sm"
@@ -118,7 +118,7 @@ const MainProducts = () => {
               placeholder="SKU"
             />
             <button
-              onClick={handleSubmit} // ВИПРАВЛЕНО: було handleSave
+              onClick={handleSubmit}
               className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg font-medium transition-colors"
             >
               Save Product
