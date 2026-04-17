@@ -33,7 +33,6 @@ const Suppliers = () => {
     if (savedSuppliers) {
       setSuppliers(JSON.parse(savedSuppliers));
     } else {
-      // Якщо в localStorage порожньо, беремо початкові дані з сервісу
       const data = getSuppliers();
       setSuppliers(data);
     }
@@ -41,7 +40,7 @@ const Suppliers = () => {
 
   useEffect(() => {
     localStorage.setItem("suppliers", JSON.stringify(suppliers));
-  }, [suppliers]); // Виконується при кожній зміні списку
+  }, [suppliers]); 
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -107,7 +106,8 @@ const Suppliers = () => {
           onClick={() => setIsFormVisible(!isFormVisible)}
           className="bg-[#3B82F6] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-600 transition-colors"
         >
-          <Plus className="w-4 h-4" /> Connect New Supplier
+          <Plus className="w-4 h-4" />
+          {isFormVisible ? "Cancel" : "Create New Supplier"}
         </button>
       </div>
 

@@ -19,7 +19,7 @@ const SupplierProducts = () => {
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [supplierName, setSupplierName] = useState("Supplier");
-  const [statusFilter, setStatusFilter] = useState("All Statuses");
+  const [statusFilter, setStatusFilter] = useState("All Statuses");  
 
   useEffect(() => {
     const allSuppliers = getSuppliers(); // Отримуємо список усіх постачальників [ {id: 1, name: '...'}, {id: 2, ...} ]
@@ -172,7 +172,7 @@ const SupplierProducts = () => {
               {/* 4. Action / Link */}
               <div className="col-span-4">
                 <button 
-                onClick={() => navigate(`/matching?supplierProductId=${products.id}`)}
+                onClick={() => navigate(`/matching?supplierProductId=${product.id}`)}
                 className="w-full text-center py-2 px-3 border border-slate-300 border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-colors font-medium">
                   Find Match
                 </button> 
