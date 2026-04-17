@@ -15,6 +15,8 @@ const MainProducts = () => {
 
   const [editingProductId, setEditingProductId] = useState(null);
 
+  const [allMatches, setAllMatches] = useState([])
+  
   useEffect(() => {
     const savedProducts = localStorage.getItem("main_products");
 
@@ -24,6 +26,15 @@ const MainProducts = () => {
       const data = getMainProducts();
       setProducts(data);
     }
+
+    const suppliers = JSON.parse(localStorage.getItem("suppliers") || "[]")
+    let allLinkedItems = []
+
+    suppliers.forEach(s => {
+      const sProducts = JSON.parse(localStorage.getItem(`supplier_products_${s.id}`) || "[]");
+       allLinkedItems = [...allLinkedItems, ...sProducts];
+    })
+    setAllMatches(allLinkedItems.filter(p => p.mainProductId))
   }, []); // Виконується 1 раз
 
   const filteredProducts = products.filter(
@@ -43,9 +54,15 @@ const MainProducts = () => {
       return;
     }
 
+    if (!formData.SKU.trim()) {
+      alert("Назва SKU обов'язкова!");
+      return;
+    }
+
     if (formData.SKU.trim()) {
       const isDuplicate = products.some((p) => 
-        p.SKU === formData.SKU.trim() && p.id !== editingProductId) 
+        p.SKU === formData.SKU.trim() &&
+        p.id !== editingProductId)
       if (isDuplicate) {
         alert("Товар з таким SKU вже існує!");
         return;
@@ -54,13 +71,15 @@ const MainProducts = () => {
 
     if (editingProductId) {
       const updatedProducts = products.map((item) => {
-        item.id = editingProductId ? { ...item, ...formData } : item;
+        if (item.id === editingProductId) {
+          return { ...item, ...formData}
+        }
+        return item
       });
       setProducts(updatedProducts);
       localStorage.setItem("main_products", JSON.stringify(updatedProducts));
     } else {
       const updatedList = saveMainProducts(formData)
-
       setProducts(updatedList)
     }
 
@@ -70,7 +89,7 @@ const MainProducts = () => {
   };
 
   const handleEdit = (product) => {
-    setFormData({ name: product.name, SKU: product.SKU });
+    setFormData({ name: product.name, SKU: product.SKU, brand: product.brand, category: product.category });
     setEditingProductId(product.id);
     setIsFormVisible(true);
   };
@@ -117,12 +136,26 @@ const MainProducts = () => {
               className="p-2 border border-slate-200 rounded-lg text-sm font-mono"
               placeholder="SKU"
             />
+            <input
+            name="Brand"
+            value={formData.brand}
+            onChange={handleInputChange}
+            className="p-2 border border-slate-200 rounded-lg text-sm font-mono"
+            placeholder="Brand"
+            />
+            <input
+                name="Category"
+                value={formData.category}
+                onChange={handleInputChange}
+                className="p-2 border border-slate-200 rounded-lg text-sm font-mono"
+                placeholder="Category"
+            />
             <button
               onClick={handleSubmit}
               className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg font-medium transition-colors"
             >
-              Save Product
-            </button>
+            Save Product
+          </button>
           </div>
         </div>
       )}
@@ -179,8 +212,12 @@ const MainProducts = () => {
                 {product.category || "—"}
               </div>
               <div className="col-span-3">
-                <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                  {product.linkedCount || 0} Linked
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                  allMatches.filter(m => m.mainProductId === product.id).length > 0 
+                    ? "text-blue-600 bg-blue-50 border-blue-200" 
+                    : "text-slate-500 bg-slate-100 border-slate-200"
+                   }`}>
+                  {allMatches.filter(m => m.mainProductId === product.id).length} Linked
                 </span>
               </div>
               <div className="col-span-1 text-right">
