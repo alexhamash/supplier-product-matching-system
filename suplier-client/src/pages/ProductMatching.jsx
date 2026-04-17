@@ -54,7 +54,18 @@ const ProductMatching = () => {
     }
   }, []);
 
+
   const selectedProduct = mainProducts[activeItem] || null;
+
+  // useEffect (() => {
+  //   if(selectedProduct) {
+  //     const hasLinks = allSupplierProducts.some(
+  //       (p) => p.status === "matched" && p.mainProductId === selectedProduct.id
+  //     )
+  //     setShowLinked(hasLinks)
+  //   }
+  // }, [selectedProduct?.id])
+
 
   const unmatchedProducts = allSupplierProducts.filter(
     (p) => p.status !== "matched",
@@ -66,6 +77,12 @@ const ProductMatching = () => {
         (p) =>
           p.status === "matched" && p.mainProductId === selectedProduct?.id,
       );
+  
+  const uniqueSuppliersCount = new Set (
+    allSupplierProducts
+      .filter(p => p.status === "matched" && p.mainProductId === selectedProduct?.id)
+      .map(p => p.supplierId)
+  ).size
 
   const handleLink = (supplierProduct) => {
     if (!selectedProduct) return;
@@ -125,6 +142,8 @@ const ProductMatching = () => {
 
   toast.error(`Зв'язок розірвано: ${supplierProduct.name}`);
 };
+
+
 
 
   const filteredMainProducts = mainProducts.filter(product => {
@@ -276,7 +295,7 @@ const ProductMatching = () => {
                     {selectedProduct?.name || "Оберіть товар"}
                   </h2>
                   <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                    0 Suppliers Currently Linked
+                   {uniqueSuppliersCount} Suppliers Currently Linked
                   </span>
                 </div>
 
