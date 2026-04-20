@@ -1,88 +1,43 @@
-import React, { useEffect, useState } from "react";
-import {
-  Search,
-  Plus,
-  Sparkles,
-  Database,
-  CheckCircle2,
-  Layers,
-  XCircle,
-  SearchCode,
-  Package,
-  PlusCircle,
-} from "lucide-react";
-import { getMainProducts } from "../services/mainProductService";
-import {
-  getSupplierProducts,
-  importSupplierData,
-} from "../services/supplierService";
+import React, { useState } from "react";
+import {Search,Plus,Sparkles,Database,CheckCircle2,Layers,XCircle,SearchCode,Package,PlusCircle,} from "lucide-react";
 import toast from "react-hot-toast";
-import {
-  createMatch,
-  getSupplierSuggestions,
-} from "../services/matchingService";
+import { createMatch, getSupplierSuggestions,} from "../services/matchingService";
 
-import { useSearchParams } from "react-router-dom";
+import { useProducts } from "../context/ProductContext";
 
 
 const ProductMatching = () => {
-  const [mainProducts, setMainProducts] = useState([]);
+  const { products, supplierProducts, setSupplierProducts, setProducts, loading} = useProducts()
+
   const [activeItem, setActiveItem] = useState(0);
-  const [allSupplierProducts, setAllSupplierProducts] = useState([]);
 
   const [showLinked, setShowLinked] = useState(false);
 
   const [searchTerm, setSearchTearm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
-
-  const [searchParams] = useSearchParams();
-  const targetSupplierId = searchParams.get("supplierProductId")
+  
+  if (loading) return <div>Завантаження...</div>;
   
 
-  useEffect(() => {
-    const data = getMainProducts();
-    setMainProducts(data);
+  const selectedProduct = products[activeItem] || null;
 
-    const existingSData = getSupplierProducts(1);
-    if (existingSData && existingSData.length > 0) {
-      setAllSupplierProducts(existingSData);
-    } else {
-      importSupplierData(1).then(() => {
-        const sData = getSupplierProducts(1);
-        setAllSupplierProducts(sData);
-      });
-    }
-  }, []);
-
-
-  const selectedProduct = mainProducts[activeItem] || null;
-
-  // useEffect (() => {
-  //   if(selectedProduct) {
-  //     const hasLinks = allSupplierProducts.some(
-  //       (p) => p.status === "matched" && p.mainProductId === selectedProduct.id
-  //     )
-  //     setShowLinked(hasLinks)
-  //   }
-  // }, [selectedProduct?.id])
-
-
-  const unmatchedProducts = allSupplierProducts.filter(
+  const unmatchedProducts = supplierProducts.filter(
     (p) => p.status !== "matched",
   );
 
   const finalItems = !showLinked
     ? getSupplierSuggestions(selectedProduct, unmatchedProducts)
-    : allSupplierProducts.filter(
+    : supplierProducts.filter(
         (p) =>
           p.status === "matched" && p.mainProductId === selectedProduct?.id,
       );
   
   const uniqueSuppliersCount = new Set (
-    allSupplierProducts
+    supplierProducts
       .filter(p => p.status === "matched" && p.mainProductId === selectedProduct?.id)
       .map(p => p.supplierId)
   ).size
+
 
   const handleLink = (supplierProduct) => {
     if (!selectedProduct) return;
@@ -90,23 +45,21 @@ const ProductMatching = () => {
     const sId = supplierProduct.supplierId || 1;
     createMatch(selectedProduct.id, supplierProduct.id, sId);
 
-    setAllSupplierProducts((prev) =>
-      prev.map((p) =>
+    setSupplierProducts(
+      supplierProducts.map((p) =>
         p.id === supplierProduct.id
           ? { ...p, status: "matched", mainProductId: selectedProduct.id }
           : p,
       ),
     );
 
-    setMainProducts((prev) => {
-      const updated = prev.map((p) =>
+    setProducts(
+      products.map((p) =>
         p.id === selectedProduct.id
           ? { ...p, linkedCount: (p.linkedCount || 0) + 1 }
           : p,
-      );
-      localStorage.setItem("main_products", JSON.stringify(updated));
-      return updated;
-    });
+      )
+    );
 
     toast.success(`Зв'язано: ${supplierProduct.name}`, {
       duration: 4000,
@@ -128,25 +81,27 @@ const ProductMatching = () => {
   const handleUnlink = (supplierProduct) => {
   createMatch(null, supplierProduct.id, supplierProduct.supplierId || 1);
 
-  setAllSupplierProducts(prev => prev.map(p =>
-    p.id === supplierProduct.id ? { ...p, status: "unmatched", mainProductId: null } : p
+  setSupplierProducts(
+    supplierProducts.map(p =>
+    p.id === supplierProduct.id 
+      ? { ...p, status: "unmatched", mainProductId: null } 
+      : p
   ));
 
-  setMainProducts(prev => {
-    const updated = prev.map(p => 
-      p.id === selectedProduct.id ? { ...p, linkedCount: Math.max(0, (p.linkedCount || 0) - 1) } : p
-    );
-    localStorage.setItem("main_products", JSON.stringify(updated));
-    return updated;
-  });
+  setProducts(
+    products.map(p => 
+      p.id === selectedProduct.id 
+      ? { ...p, linkedCount: Math.max(0, (p.linkedCount || 0) - 1) } 
+      : p
+    )
+  );
 
   toast.error(`Зв'язок розірвано: ${supplierProduct.name}`);
 };
 
 
 
-
-  const filteredMainProducts = mainProducts.filter(product => {
+  const filteredMainProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           product.SKU.toLowerCase().includes(searchTerm.toLowerCase())
     
@@ -194,7 +149,7 @@ const ProductMatching = () => {
               <h2 className="font-semibold text-slate-800">Main Catalog</h2>
             </div>
             <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-md">
-              {mainProducts.length} Items
+              {products.length} Items
             </span>
           </div>
 

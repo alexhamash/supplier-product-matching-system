@@ -64,7 +64,7 @@ export const linkProduct = (supplierProductId, mainProductId) => {
 export const importSupplierData = (supplierId) => {
   return new Promise((resolve) => {
     setTimeout(() => {
-      const fakeProducts = [
+      const  fakeProducts = [
         // Постачальник 1: Техніка Apple та аксесуари
         {
           id: "s1-101",
@@ -137,12 +137,25 @@ export const importSupplierData = (supplierId) => {
           supplierId: 3,
         },
       ];
-      // Зберігаємо в localStorage для синхронізації між сторінками
-      localStorage.setItem(
-        `supplier_products_${supplierId}`,
-        JSON.stringify(fakeProducts),
-      );
-      resolve({ count: fakeProducts.length });
+
+      const filteredProducts = fakeProducts.filter(
+        (p) => p.supplierId === Number(supplierId)
+      )
+
+      if (filteredProducts.length === 0) {
+        resolve({ count: 0, products: [] });
+          return; 
+      }
+
+      const existingData = JSON.parse(localStorage.getItem("supplier_products") || "[]")
+      const updatedList = [...existingData, ...filteredProducts]
+
+      localStorage.setItem(`supplier_products_${supplierId}`, JSON.stringify(updatedList),);
+      
+      resolve({ 
+        count: filteredProducts.length,
+        products: filteredProducts
+      });
     }, 200);
   });
 };

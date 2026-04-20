@@ -1,41 +1,24 @@
 import React, { useState, useEffect } from "react";
 import { Search, Filter, Plus, Package, ChevronDown } from "lucide-react";
-import { getMainProducts, saveMainProducts } from "../services/mainProductService";
+import { saveMainProducts } from "../services/mainProductService";
+import { useProducts } from "../context/ProductContext";
 
 const MainProducts = () => {
-  const [products, setProducts] = useState([]);
+  const { products, setProducts, loading, updateProduct, addProduct} = useProducts()
+
   const [searchTerm, setSearchTerm] = useState("");
+
   const [formData, setFormData] = useState({
     name: "",
     SKU: "",
     brand: "",
     category: "",
   });
-  const [isFormVisible, setIsFormVisible] = useState(false);
 
+
+  const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
 
-  const [allMatches, setAllMatches] = useState([])
-  
-  useEffect(() => {
-    const savedProducts = localStorage.getItem("main_products");
-
-    if (savedProducts) {
-      setProducts(JSON.parse(savedProducts));
-    } else {
-      const data = getMainProducts();
-      setProducts(data);
-    }
-
-    const suppliers = JSON.parse(localStorage.getItem("suppliers") || "[]")
-    let allLinkedItems = []
-
-    suppliers.forEach(s => {
-      const sProducts = JSON.parse(localStorage.getItem(`supplier_products_${s.id}`) || "[]");
-       allLinkedItems = [...allLinkedItems, ...sProducts];
-    })
-    setAllMatches(allLinkedItems.filter(p => p.mainProductId))
-  }, []); // Виконується 1 раз
 
   const filteredProducts = products.filter(
     (product) =>
@@ -49,49 +32,45 @@ const MainProducts = () => {
   };
 
   const handleSubmit = () => {
-    if (!formData.name.trim()) {
-      alert("Назва товару обов'язкова!");
+
+    if (!formData.name.trim() || !formData.SKU.trim()) {
+      alert("Заповність поля");
       return;
     }
 
-    if (!formData.SKU.trim()) {
-      alert("Назва SKU обов'язкова!");
-      return;
+    const isDuplicate = products.some(p => 
+        p.SKU === formData.SKU.trim() && p.id !== editingProductId
+    )
+    if(isDuplicate) {
+      alert("Товар існує з таким SKU")
+      return
     }
 
-    if (formData.SKU.trim()) {
-      const isDuplicate = products.some((p) => 
-        p.SKU === formData.SKU.trim() &&
-        p.id !== editingProductId)
-      if (isDuplicate) {
-        alert("Товар з таким SKU вже існує!");
-        return;
-      }
-    }
-
-    if (editingProductId) {
-      const updatedProducts = products.map((item) => {
-        if (item.id === editingProductId) {
-          return { ...item, ...formData}
-        }
-        return item
-      });
-      setProducts(updatedProducts);
-      localStorage.setItem("main_products", JSON.stringify(updatedProducts));
+    if(editingProductId) {
+      updateProduct({...formData, id: editingProductId})
     } else {
-      const updatedList = saveMainProducts(formData)
-      setProducts(updatedList)
+      const newProduct = {
+        ...formData,
+        id: Date.now(),
+        linkedCount: 0
+      }
+      addProduct(newProduct)
     }
-
+  
     setIsFormVisible(false);
     setEditingProductId(null);
     setFormData({ name: "", SKU: "", brand: "", category: "" });
   };
 
   const handleEdit = (product) => {
-    setFormData({ name: product.name, SKU: product.SKU, brand: product.brand, category: product.category });
     setEditingProductId(product.id);
-    setIsFormVisible(true);
+    setFormData({
+       name: product.name,
+       SKU: product.SKU,
+       brand: product.brand,
+       category: product.category
+    })
+    setIsFormVisible(true)
   };
 
   return (
@@ -137,14 +116,14 @@ const MainProducts = () => {
               placeholder="SKU"
             />
             <input
-            name="Brand"
-            value={formData.brand}
-            onChange={handleInputChange}
-            className="p-2 border border-slate-200 rounded-lg text-sm font-mono"
-            placeholder="Brand"
+                name="brand"
+                value={formData.brand}
+                onChange={handleInputChange}
+                className="p-2 border border-slate-200 rounded-lg text-sm font-mono"
+                placeholder="Brand"
             />
             <input
-                name="Category"
+                name="category"
                 value={formData.category}
                 onChange={handleInputChange}
                 className="p-2 border border-slate-200 rounded-lg text-sm font-mono"
@@ -213,11 +192,11 @@ const MainProducts = () => {
               </div>
               <div className="col-span-3">
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                  allMatches.filter(m => m.mainProductId === product.id).length > 0 
+                  products.filter(m => m.mainProductId === product.id).length > 0 
                     ? "text-blue-600 bg-blue-50 border-blue-200" 
                     : "text-slate-500 bg-slate-100 border-slate-200"
                    }`}>
-                  {allMatches.filter(m => m.mainProductId === product.id).length} Linked
+                  {products.filter(m => m.mainProductId === product.id).length} Linked
                 </span>
               </div>
               <div className="col-span-1 text-right">

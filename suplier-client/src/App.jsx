@@ -7,25 +7,25 @@ import SupplierProducts from "./pages/SupplierProducts"
 import ProductMatching from "./pages/ProductMatching"
 import MainProducts from "./pages/MainProducts"
 import SupplierImport from "./pages/SupplierImport"
-
+import { ProductProvider } from "./context/ProductContext";
  
 function App() {
   return (
-    <>
-    <Toaster position="top-right" />
+    <ProductProvider>
+      <Toaster position="top-right" />
 
-    <Routes>
-      <Route path="/" element={<MainLayout />}>
-        <Route index element={<Dashboard />} />
-        <Route path="suppliers" element={<Suppliers />} />
-        <Route path="suppliers-products" element={<SupplierProducts />} />
-        <Route path="product-matching" element={<ProductMatching />} />
-        <Route path="main-products" element={<MainProducts />} />
-        <Route path="suppliers/:id/import" element={<SupplierImport />} />
-        <Route path="/matching" element={<ProductMatching />} />
-      </Route>
-    </Routes>
-    </>
+        <Routes>
+          <Route path="/" element={<MainLayout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="suppliers" element={<Suppliers />} />
+            <Route path="suppliers-products" element={<SupplierProducts />} />
+            <Route path="product-matching" element={<ProductMatching />} />
+            <Route path="main-products" element={<MainProducts />} />
+            <Route path="suppliers/:id/import" element={<SupplierImport />} />
+            <Route path="/matching" element={<ProductMatching />} />
+          </Route>
+        </Routes>
+    </ProductProvider>
     
   )
 }
