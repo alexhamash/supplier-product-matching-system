@@ -11,6 +11,7 @@ interface ProductContextType {
     setSupplierProducts: (supplierProducts: SupplierProduct[]) => void
     loading: boolean
     setLoading: (loading: boolean) => void;
+    addProduct: (product: MainProduct) => void;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined)
@@ -37,13 +38,25 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
             setLoading(false)
         }
     }
-    loadData()
+    loadData()  
    }, [])
+
+    const addProduct = (newProduct: MainProduct) => {
+        const updated = [...products, newProduct];
+        setProducts(updated);
+        localStorage.setItem("main_products", JSON.stringify(updated));
+    };
+
+    const updateProduct = (updatedItem: MainProduct) => {
+        const updated = products.map(p => p.id === updatedItem.id ? updatedItem : p);
+        setProducts(updated);
+        localStorage.setItem("main_products", JSON.stringify(updated));
+    };
 
     
 
 return (
-    <ProductContext.Provider value = {{products, setProducts, supplierProducts, setSupplierProducts, loading, setLoading }}>
+    <ProductContext.Provider value = {{products, setProducts, supplierProducts, setSupplierProducts, loading, setLoading, addProduct }}>
         {children}
     </ProductContext.Provider>
 )
