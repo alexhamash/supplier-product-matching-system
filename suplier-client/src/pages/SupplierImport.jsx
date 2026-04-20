@@ -2,39 +2,50 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getSuppliers, importSupplierData } from "../services/supplierService";
 import { ArrowLeft, RefreshCw, CheckCircle } from "lucide-react";
+import { useProducts } from "../context/ProductContext";
 
 const SupplierImport = () => {
   const { id } = useParams(); // Отримуємо ID з посилання
   const navigate = useNavigate();
 
+  const { setSupplierProducts } = useProducts()
+
   const [supplier, setSupplier] = useState(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
-  // 1. Знайди постачальника за ID при завантаженні сторінки
   useEffect(() => {
     const allSuppliers = getSuppliers();
     const found = allSuppliers.find((s) => s.id === parseInt(id));
-    setSupplier(found);
-  }, [id]);
+    if (found) {
+      setSupplier(found);
+    } else {
+      navigate("/suppliers");
+    }
+  }, [id, navigate]);
 
-  // 2. Функція імітації імпорту
   const handleStartImport = () => {
-    setIsImporting(true);
+    setIsImporting(true); 
+    setImportResult(null);
 
-    importSupplierData(parseInt(id))
+    importSupplierData(id)
       .then((result) => {
-        setImportResult(result)
-        setIsImporting(false)
+        setSupplierProducts((prev) => {
+          const combined = [...prev, ...result.products];
+          return combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+        });
+        setImportResult(result);
       })
       .catch((error) => {
-        console.error("Import Failed", error)
-        setIsImporting(false)
+        console.error("Import error:", error);
       })
-  }
+      .finally(() => {
+        setIsImporting(false); 
+      });
+  };
 
 
-  if (!supplier) return <div className="p-10">Loading...</div>;
+  if (!supplier) return <div className="  p-10">Loading...</div>;
 
   return (
     <div className="max-w-4xl mx-auto p-6">
