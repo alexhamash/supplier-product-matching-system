@@ -16,7 +16,7 @@ const SupplierImport = () => {
 
   useEffect(() => {
     const allSuppliers = getSuppliers();
-    const found = allSuppliers.find((s) => s.id === parseInt(id));
+    const found = allSuppliers.find((s) => s.id === Number(id));
     if (found) {
       setSupplier(found);
     } else {
@@ -29,14 +29,15 @@ const SupplierImport = () => {
     setImportResult(null);
 
     importSupplierData(id)
-      .then((result) => {
-        setSupplierProducts((prev) => {
+      .then((result) => { 
+        setSupplierProducts(prev => {
           const combined = [...prev, ...result.products];
           return combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
         });
         setImportResult(result);
       })
       .catch((error) => {
+
         console.error("Import error:", error);
       })
       .finally(() => {
