@@ -1,23 +1,14 @@
 import { createContext, useState, ReactNode, useContext, useEffect } from "react"
-import { MainProduct, SupplierProduct } from "../types"
+import { MainProduct, Supplier, SupplierProduct, type ProductContextState } from "../types"
 import { getMainProducts } from "../services/mainProductService"
-import { getSupplierProducts} from "../services/supplierService"
+import { getSupplierProducts, getSuppliers} from "../services/supplierService"
 
-
-interface ProductContextType {
-    products: MainProduct[]
-    setProducts: (products: MainProduct[]) => void
-    supplierProducts: SupplierProduct[]
-    setSupplierProducts: (supplierProducts: SupplierProduct[]) => void
-    loading: boolean
-    setLoading: (loading: boolean) => void;
-    addProduct: (product: MainProduct) => void;
-}
-
-const ProductContext = createContext<ProductContextType | undefined>(undefined)
+const ProductContext = createContext<ProductContextState | undefined>(undefined)
 
 
 export const ProductProvider = ({ children }: { children: ReactNode }) => {
+    const [supplier, setSupplier] = useState<Supplier[]>([])
+    const [activeSupplier, setActiveSupplier] = useState<Supplier | null>(null)
     const [products, setProducts] = useState<MainProduct[]>([])
     const [supplierProducts, setSupplierProducts] = useState<SupplierProduct[]>([])
     const [loading, setLoading] = useState(false)
@@ -28,9 +19,11 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
         try {
             const mainData = getMainProducts() as MainProduct[]
             const supplierData = getSupplierProducts(1) as SupplierProduct[]
+            const suppliers = getSuppliers() as Supplier[]
 
             setProducts(mainData)
             setSupplierProducts(supplierData)
+            setSupplier(suppliers)
         } catch (error) {
             console.log("Помилка завантаження", error);
             
@@ -53,10 +46,30 @@ export const ProductProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem("main_products", JSON.stringify(updated));
     };
 
+    const updateSupplier = (updatedItem: Supplier) => {
+        const updatedSuppliers = supplier.map(p => p.id === updatedItem.id ? updatedItem : p);
+        setSupplier(updatedSuppliers);
+        localStorage.setItem("suppliers", JSON.stringify(updatedSuppliers));
+    };
+
+
     
 
 return (
-    <ProductContext.Provider value = {{products, setProducts, supplierProducts, setSupplierProducts, loading, setLoading, addProduct }}>
+    <ProductContext.Provider value = {{
+            products,
+            setProducts,
+            supplier,
+            setSupplier,
+            activeSupplier,
+            supplierProducts,
+            setSupplierProducts,
+            loading,
+            setLoading,
+            addProduct,
+            updateProduct,
+            updateSupplier
+        }}>
         {children}
     </ProductContext.Provider>
 )

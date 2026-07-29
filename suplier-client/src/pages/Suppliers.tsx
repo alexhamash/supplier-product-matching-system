@@ -1,92 +1,111 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import {
-  Search,
-  Plus,
-  RefreshCw,
-  MoreVertical,
-  FileSpreadsheet,
-  Link as LinkIcon,
-  CheckCircle2,
-  Clock,
-} from "lucide-react";
-// 1. Імпортуємо наш сервіс (створи його, якщо він зник)
+import { Search,Plus,RefreshCw,FileSpreadsheet, CheckCircle2 } from "lucide-react";
+
 import { getSuppliers } from "../services/supplierService";
+import { useProducts } from "../context/ProductContext";
+import type { Supplier } from "../types";
 
 const Suppliers = () => {
-  const [suppliers, setSuppliers] = useState([]);
+  // const [suppliers, setSuppliers] = useState([]);
+
+  const {supplier, setSupplier, updateSupplier } = useProducts()
   const [searchTerm, setSearchTerm] = useState("");
 
   const [formData, setFormData] = useState({
-    name: "",
+    name: "", 
     sheetUrl: "",
   });
 
   const [isFormVisible, setIsFormVisible] = useState(false);
 
-  const [editingId, setEditingId] = useState(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   useEffect(() => {
-    // Прибираємо пробіл у назві ключа!
     const savedSuppliers = localStorage.getItem("suppliers");
 
     if (savedSuppliers) {
-      setSuppliers(JSON.parse(savedSuppliers));
+      setSupplier(JSON.parse(savedSuppliers));
     } else {
       const data = getSuppliers();
-      setSuppliers(data);
+      setSupplier(data);
     }
   }, []); // Виконується 1 раз
 
   useEffect(() => {
-    localStorage.setItem("suppliers", JSON.stringify(suppliers));
-  }, [suppliers]); 
+    localStorage.setItem("suppliers", JSON.stringify(supplier));
+  }, [supplier]); 
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: any) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // const handleSubmit = () => {
+  //   if (!formData.name.trim()) {
+  //     alert("Назва постачальника обов'язкова!");
+  //     return;
+  //   }
+
+  //   if (editingId) {
+  //     const updatedSuppliers = supplier.map((s) => {
+  //       s.id === editingId ? { ...s, ...formData } : s;
+  //     });
+  //     setSupplier(updateSupplier);
+  //     setEditingId(null);
+  //   } else {
+  //     const newSupplier = {
+  //       ...formData,
+  //       id: Date.now(),
+  //       productsCount: 0,
+  //     };
+
+  //     setSupplier([...supplier, newSupplier]);
+  //   }
+
+  //   setIsFormVisible(false);
+  //   setFormData({ name: "", sheetUrl: "" });
+  // };
+
   const handleSubmit = () => {
+
     if (!formData.name.trim()) {
-      alert("Назва постачальника обов'язкова!");
+      alert("Назва постачальника обовязкова");
       return;
     }
 
-    if (editingId) {
-      const updatedSuppliers = suppliers.map((s) => {
-        s.id === editingId ? { ...s, ...formData } : s;
-      });
-      setSuppliers(updatedSuppliers);
-      setEditingId(null);
+    if(editingId) {
+      updateSupplier({...formData, id: editingId, productsCount: 0, status: 'Active', lastSync: null})
     } else {
-      const newSupplier = {
+      const newSupplier: Supplier = {
         ...formData,
         id: Date.now(),
         productsCount: 0,
-      };
-
-      setSuppliers([...suppliers, newSupplier]);
+        status: 'Active',
+        lastSync: null
+      }
+      setSupplier([...supplier, newSupplier])
     }
-
+  
     setIsFormVisible(false);
+    setEditingId(null);
     setFormData({ name: "", sheetUrl: "" });
   };
 
-  const handleDelete = (id) => {
-    setSuppliers((prevSuppliers) =>
-      prevSuppliers.filter((supplier) => supplier.id !== id),
-    );
-  };
+  // const handleDelete = (id) => {
+  //   setSuppliers((prevSuppliers) =>
+  //     prevSuppliers.filter((supplier) => supplier.id !== id),
+  //   );
+  // };
 
-  const handleEdit = (supplier) => {
-    setFormData({ name: supplier.name, sheetUrl: supplier.sheetUrl });
-    setEditingId(supplier.id);
-    setIsFormVisible(true);
-  };
+  // const handleEdit = (supplier) => {
+  //   setFormData({ name: supplier.name, sheetUrl: supplier.sheetUrl });
+  //   setEditingId(supplier.id);
+  //   setIsFormVisible(true);
+  // };
 
   // 3. Фільтрація за пошуком
-  const filteredSuppliers = suppliers.filter((s) =>
+  const filteredSuppliers = supplier.filter((s) =>
     s.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
@@ -168,21 +187,21 @@ const Suppliers = () => {
 
         <div className="divide-y divide-slate-100">
           {/* 4. МАГІЯ: Замість статичних рядків робимо .map() */}
-          {filteredSuppliers.map((supplier) => (
+          {filteredSuppliers.map((s) => (
             <div
-              key={supplier.id}
+              key={s.id}
               className="grid grid-cols-12 gap-4 px-6 py-5 items-center hover:bg-slate-50/50 transition-colors group"
             >
               <div className="col-span-3 flex items-center gap-3">
                 {/* Аватарка з першою літерою */}
                 <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 font-bold flex items-center justify-center border border-blue-100">
-                  {supplier.name.charAt(0)}
+                  {s.name.charAt(0)}
                 </div>
                 <div>
                   <p className="font-semibold text-slate-900 text-sm">
-                    {supplier.name}
+                    {s.name}
                   </p>
-                  <p className="text-xs text-slate-500">ID: {supplier.id}</p>
+                  <p className="text-xs text-slate-500">ID: {s.id}</p>
                 </div>
               </div>
 
@@ -194,15 +213,15 @@ const Suppliers = () => {
                   </span>
                 </div>
                 <a
-                  href={supplier.sheetUrl}
+                  href={s.sheetUrl}
                   className="text-xs text-blue-600 truncate block pr-4"
                 >
-                  {supplier.sheetUrl}
+                  {s.sheetUrl}
                 </a>
               </div>
 
               <div className="col-span-2 text-sm text-slate-800">
-                {supplier.productsCount || 0} items
+                {s.productsCount || 0} items
               </div>
 
               <div className="col-span-2">
@@ -214,7 +233,7 @@ const Suppliers = () => {
               <div className="col-span-1 flex justify-end gap-2 items-center">
                 {/* Існуюча кнопка імпорту */}
                 <Link
-                  to={`/suppliers/${supplier.id}/import`}
+                  to={`/suppliers/${s.id}/import`}
                   className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                 >
                   <RefreshCw className="w-4 h-4" />
@@ -223,7 +242,9 @@ const Suppliers = () => {
                 <button
                   onClick={() => {
                     if (window.confirm("Видалити цього постачальника?")) {
-                      handleDelete(supplier.id);
+                      const updatedSuppliers = supplier.filter((item) => item.id !== s.id);
+                      setSupplier(updatedSuppliers);
+                      localStorage.setItem("suppliers", JSON.stringify(updatedSuppliers));
                     }
                   }}
                   className="text-xs font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors"
@@ -231,7 +252,11 @@ const Suppliers = () => {
                   Del
                 </button>
                 <button
-                  onClick={() => handleEdit(supplier)}
+                  onClick={() => {
+                    setFormData({ name: s.name, sheetUrl: s.sheetUrl });
+                    setEditingId(s.id);
+                    setIsFormVisible(true);
+                  }}
                   className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                 >
                   Edit
