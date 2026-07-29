@@ -1,23 +1,38 @@
-import React, { useState } from "react";
-import {Search,Plus,Sparkles,Database,CheckCircle2,Layers,XCircle,SearchCode,Package,PlusCircle,} from "lucide-react";
+import React, { useState, type ChangeEvent } from "react";
+import {
+  Search,
+  Plus,
+  Sparkles,
+  Database,
+  CheckCircle2,
+  Layers,
+  XCircle,
+  SearchCode,
+  Package,
+} from "lucide-react";
 import toast from "react-hot-toast";
-import { createMatch, getSupplierSuggestions,} from "../services/matchingService";
-
+import {
+  createMatch,
+  getSupplierSuggestions,
+} from "../services/matchingService";
 import { useProducts } from "../context/ProductContext";
+import type { SupplierProduct } from "../types";
 
+const ProductMatching: React.FC = () => {
+  const {
+    products,
+    supplierProducts,
+    setSupplierProducts,
+    setProducts,
+    loading,
+  } = useProducts();
 
-const ProductMatching = () => {
-  const { products, supplierProducts, setSupplierProducts, setProducts, loading} = useProducts()
+  const [activeItem, setActiveItem] = useState<number>(0);
+  const [showLinked, setShowLinked] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
 
-  const [activeItem, setActiveItem] = useState(0);
-
-  const [showLinked, setShowLinked] = useState(false);
-
-  const [searchTerm, setSearchTearm] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
-  
   if (loading) return <div>Завантаження...</div>;
-  
 
   const selectedProduct = products[activeItem] || null;
 
@@ -26,20 +41,24 @@ const ProductMatching = () => {
   );
 
   const finalItems = !showLinked
-    ? getSupplierSuggestions(selectedProduct, unmatchedProducts)
+    ? selectedProduct
+      ? getSupplierSuggestions(selectedProduct, unmatchedProducts)
+      : []
     : supplierProducts.filter(
         (p) =>
           p.status === "matched" && p.mainProductId === selectedProduct?.id,
       );
-  
-  const uniqueSuppliersCount = new Set (
+
+  const uniqueSuppliersCount = new Set(
     supplierProducts
-      .filter(p => p.status === "matched" && p.mainProductId === selectedProduct?.id)
-      .map(p => p.supplierId)
-  ).size
+      .filter(
+        (p) =>
+          p.status === "matched" && p.mainProductId === selectedProduct?.id,
+      )
+      .map((p) => p.supplierId),
+  ).size;
 
-
-  const handleLink = (supplierProduct) => {
+  const handleLink = (supplierProduct: SupplierProduct): void => {
     if (!selectedProduct) return;
 
     const sId = supplierProduct.supplierId || 1;
@@ -58,7 +77,7 @@ const ProductMatching = () => {
         p.id === selectedProduct.id
           ? { ...p, linkedCount: (p.linkedCount || 0) + 1 }
           : p,
-      )
+      ),
     );
 
     toast.success(`Зв'язано: ${supplierProduct.name}`, {
@@ -78,41 +97,44 @@ const ProductMatching = () => {
     });
   };
 
-  const handleUnlink = (supplierProduct) => {
-  createMatch(null, supplierProduct.id, supplierProduct.supplierId || 1);
+  const handleUnlink = (supplierProduct: SupplierProduct): void => {
+    createMatch(null as unknown as number, supplierProduct.id, supplierProduct.supplierId || 1);
 
-  setSupplierProducts(
-    supplierProducts.map(p =>
-    p.id === supplierProduct.id 
-      ? { ...p, status: "unmatched", mainProductId: null } 
-      : p
-  ));
+    setSupplierProducts(
+      supplierProducts.map((p) =>
+        p.id === supplierProduct.id
+          ? { ...p, status: "unmatched", mainProductId: null }
+          : p,
+      ),
+    );
 
-  setProducts(
-    products.map(p => 
-      p.id === selectedProduct.id 
-      ? { ...p, linkedCount: Math.max(0, (p.linkedCount || 0) - 1) } 
-      : p
-    )
-  );
+    if (selectedProduct) {
+      setProducts(
+        products.map((p) =>
+          p.id === selectedProduct.id
+            ? { ...p, linkedCount: Math.max(0, (p.linkedCount || 0) - 1) }
+            : p,
+        ),
+      );
+    }
 
-  toast.error(`Зв'язок розірвано: ${supplierProduct.name}`);
-};
+    toast.error(`Зв'язок розірвано: ${supplierProduct.name}`);
+  };
 
+  const filteredMainProducts = products.filter((product): boolean => {
+    const matchesSearch =
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.SKU.toLowerCase().includes(searchTerm.toLowerCase());
 
+    const matchesStatus =
+      filterStatus === "all"
+        ? true
+        : filterStatus === "linked"
+          ? product.linkedCount > 0
+          : (product.linkedCount || 0) === 0;
 
-  const filteredMainProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          product.SKU.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    const matchesStatus = filterStatus === "all"
-      ? true
-      : filterStatus === "linked"
-        ? product.linkedCount > 0
-        : (product.linkedCount || 0) === 0
-
-    return matchesSearch && matchesStatus
-   })
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -162,22 +184,28 @@ const ProductMatching = () => {
                 type="text"
                 placeholder="Search main products..."
                 value={searchTerm}
-                onChange={(e) => setSearchTearm(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setSearchTerm(e.target.value)
+                }
                 className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors bg-slate-50"
               />
             </div>
             <div className="flex gap-1.5 p-1 bg-slate-100 rounded-lg">
-              {['all', 'unlinked', 'linked'].map((status) => (
+              {(["all", "unlinked", "linked"] as const).map((status) => (
                 <button
                   key={status}
                   onClick={() => setFilterStatus(status)}
                   className={`flex-1 text-[10px] uppercase tracking-wider font-bold py-1.5 rounded-md transition-all ${
-                    filterStatus === status 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                    filterStatus === status
+                      ? "bg-white text-indigo-600 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
                   }`}
                 >
-                  {status === 'all' ? 'All' : status === 'unlinked' ? 'Unlinked' : 'Linked'}
+                  {status === "all"
+                    ? "All"
+                    : status === "unlinked"
+                      ? "Unlinked"
+                      : "Linked"}
                 </button>
               ))}
             </div>
@@ -250,7 +278,7 @@ const ProductMatching = () => {
                     {selectedProduct?.name || "Оберіть товар"}
                   </h2>
                   <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                   {uniqueSuppliersCount} Suppliers Currently Linked
+                    {uniqueSuppliersCount} Suppliers Currently Linked
                   </span>
                 </div>
 
@@ -298,13 +326,11 @@ const ProductMatching = () => {
 
               <button
                 onClick={() => setShowLinked(!showLinked)}
-                className={`
-              flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-all duration-200
-              ${
-                showLinked
-                  ? "bg-amber-100 text-amber-800 border-amber-300 shadow-inner"
-                  : "bg-white text-indigo-600 border-slate-200 hover:bg-slate-50 hover:border-indigo-300 shadow-sm"
-              }`}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 ${
+                  showLinked
+                    ? "bg-amber-100 text-amber-800 border-amber-300 shadow-inner"
+                    : "bg-white text-indigo-600 border-slate-200 hover:bg-slate-50 hover:border-indigo-300 shadow-sm"
+                }`}
               >
                 <Layers
                   className={`w-4 h-4 ${showLinked ? "text-amber-500" : "text-indigo-500"}`}
@@ -345,13 +371,14 @@ const ProductMatching = () => {
 
               <div className="space-y-4">
                 {finalItems.length > 0 ? (
-                  finalItems.map((item) => (
-                    <div
+                  finalItems.map((item) => {
+                    const confidence = (item as { confidence?: number }).confidence ?? 0;
+                    return (<div
                       key={item.id}
                       className={`border rounded-xl p-5 transition-all relative overflow-hidden ${
-                        item.confidence > 70
+                        confidence > 70
                           ? "border-emerald-200 bg-emerald-50/40"
-                          : item.confidence > 30
+                          : confidence > 30
                             ? "border-amber-200 bg-amber-50/40"
                             : "border-slate-200 bg-white"
                       }`}
@@ -359,16 +386,20 @@ const ProductMatching = () => {
                       {/* Badge з відсотком схожості */}
                       <div>
                         {showLinked ? (
-                        <div className="absolute top-0 right-0 text-[10px] font-bold px-3 py-1 rounded-bl-lg bg-emerald-50 text-emerald-700 border-l border-b border-emerald-100 uppercase tracking-wide">
-                          Currently Linked
-                        </div>
-                      ) : (
-                        <div className={`absolute top-0 right-0 text-[10px] font-bold px-3 py-1 rounded-bl-lg border-b border-l uppercase tracking-wide ${
-                          item.confidence > 70 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200'
-                        }`}>
-                          {item.confidence}% Match
-                        </div>
-                      )}
+                          <div className="absolute top-0 right-0 text-[10px] font-bold px-3 py-1 rounded-bl-lg bg-emerald-50 text-emerald-700 border-l border-b border-emerald-100 uppercase tracking-wide">
+                            Currently Linked
+                          </div>
+                        ) : (
+                          <div
+                            className={`absolute top-0 right-0 text-[10px] font-bold px-3 py-1 rounded-bl-lg border-b border-l uppercase tracking-wide ${
+                              confidence > 70
+                                ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                                : "bg-amber-100 text-amber-800 border-amber-200"
+                            }`}
+                          >
+                            {confidence}% Match
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-start gap-5">
@@ -388,28 +419,28 @@ const ProductMatching = () => {
                           </div>
                           <div className="flex gap-3 mt-4">
                             {showLinked ? (
-                            <button 
-                              onClick={() => handleUnlink(item)}
-                              className="flex-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-all hover:border-rose-300"
-                            >
-                              <XCircle className="w-4 h-4" />
-                              Unlink from Product
-                            </button>
-                          ) : (
-                            <button 
-                              onClick={() => handleLink(item)}
-                              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-all"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                              Link to Main Product
-                            </button>
-                          )}
+                              <button
+                                onClick={() => handleUnlink(item)}
+                                className="flex-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-all hover:border-rose-300"
+                              >
+                                <XCircle className="w-4 h-4" />
+                                Unlink from Product
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleLink(item)}
+                                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-all"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                                Link to Main Product
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))
-                ) : (
+                    </div>);
+                  }))
+                : (
                   <div className="text-center py-10 text-slate-400 italic">
                     {!showLinked
                       ? "No suggestions found for this item"

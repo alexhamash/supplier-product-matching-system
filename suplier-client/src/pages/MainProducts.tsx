@@ -1,24 +1,29 @@
-import React, { useState, useEffect } from "react";
-import { Search, Filter, Plus, Package, ChevronDown } from "lucide-react";
-import { saveMainProducts } from "../services/mainProductService";
+import React, { useState, type ChangeEvent } from "react";
+import { Search, Plus, Package } from "lucide-react";
 import { useProducts } from "../context/ProductContext";
+import type { MainProduct } from "../types";
 
-const MainProducts = () => {
-  const { products, setProducts, loading, updateProduct, addProduct} = useProducts()
+interface FormData {
+  name: string;
+  SKU: string;
+  brand: string;
+  category: string;
+}
 
-  const [searchTerm, setSearchTerm] = useState("");
+const MainProducts: React.FC = () => {
+  const { products, supplierProducts, updateProduct, addProduct } = useProducts();
 
-  const [formData, setFormData] = useState({
+  const [searchTerm, setSearchTerm] = useState<string>("");
+
+  const [formData, setFormData] = useState<FormData>({
     name: "",
     SKU: "",
     brand: "",
     category: "",
   });
 
-
-  const [isFormVisible, setIsFormVisible] = useState(false);
-  const [editingProductId, setEditingProductId] = useState(null);
-
+  const [isFormVisible, setIsFormVisible] = useState<boolean>(false);
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
 
   const filteredProducts = products.filter(
     (product) =>
@@ -26,51 +31,58 @@ const MainProducts = () => {
       product.SKU.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>): void => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = () => {
-
+  const handleSubmit = (): void => {
     if (!formData.name.trim() || !formData.SKU.trim()) {
       alert("Заповність поля");
       return;
     }
 
-    const isDuplicate = products.some(p => 
-        p.SKU === formData.SKU.trim() && p.id !== editingProductId
-    )
-    if(isDuplicate) {
-      alert("Товар існує з таким SKU")
-      return
+    const isDuplicate = products.some(
+      (p) => p.SKU === formData.SKU.trim() && p.id !== editingProductId,
+    );
+    if (isDuplicate) {
+      alert("Товар існує з таким SKU");
+      return;
     }
 
-    if(editingProductId) {
-      updateProduct({...formData, id: editingProductId})
+    if (editingProductId) {
+      const updatedProduct: MainProduct = {
+        id: editingProductId,
+        name: formData.name,
+        SKU: formData.SKU,
+        brand: formData.brand,
+        category: formData.category || undefined,
+        linkedCount: 0,
+      };
+      updateProduct(updatedProduct);
     } else {
-      const newProduct = {
+      const newProduct: MainProduct = {
         ...formData,
         id: Date.now(),
-        linkedCount: 0
-      }
-      addProduct(newProduct)
+        linkedCount: 0,
+      };
+      addProduct(newProduct);
     }
-  
+
     setIsFormVisible(false);
     setEditingProductId(null);
     setFormData({ name: "", SKU: "", brand: "", category: "" });
   };
 
-  const handleEdit = (product) => {
+  const handleEdit = (product: MainProduct): void => {
     setEditingProductId(product.id);
     setFormData({
-       name: product.name,
-       SKU: product.SKU,
-       brand: product.brand,
-       category: product.category
-    })
-    setIsFormVisible(true)
+      name: product.name,
+      SKU: product.SKU,
+      brand: product.brand,
+      category: product.category ?? "",
+    });
+    setIsFormVisible(true);
   };
 
   return (
@@ -86,7 +98,7 @@ const MainProducts = () => {
           </p>
         </div>
         <button
-          onClick={() => setIsFormVisible(!isFormVisible)} 
+          onClick={() => setIsFormVisible(!isFormVisible)}
           className="bg-[#3B82F6] hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -102,7 +114,7 @@ const MainProducts = () => {
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <input
-              name="name" 
+              name="name"
               value={formData.name}
               onChange={handleInputChange}
               className="p-2 border border-slate-200 rounded-lg text-sm"
@@ -116,25 +128,25 @@ const MainProducts = () => {
               placeholder="SKU"
             />
             <input
-                name="brand"
-                value={formData.brand}
-                onChange={handleInputChange}
-                className="p-2 border border-slate-200 rounded-lg text-sm font-mono"
-                placeholder="Brand"
+              name="brand"
+              value={formData.brand}
+              onChange={handleInputChange}
+              className="p-2 border border-slate-200 rounded-lg text-sm font-mono"
+              placeholder="Brand"
             />
             <input
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                className="p-2 border border-slate-200 rounded-lg text-sm font-mono"
-                placeholder="Category"
+              name="category"
+              value={formData.category}
+              onChange={handleInputChange}
+              className="p-2 border border-slate-200 rounded-lg text-sm font-mono"
+              placeholder="Category"
             />
             <button
               onClick={handleSubmit}
               className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg font-medium transition-colors"
             >
-            Save Product
-          </button>
+              Save Product
+            </button>
           </div>
         </div>
       )}
@@ -145,8 +157,8 @@ const MainProducts = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)}
+            value={searchTerm}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
             placeholder="Search by name or SKU..."
             className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-blue-500"
           />
@@ -191,12 +203,17 @@ const MainProducts = () => {
                 {product.category || "—"}
               </div>
               <div className="col-span-3">
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                  products.filter(m => m.mainProductId === product.id).length > 0 
-                    ? "text-blue-600 bg-blue-50 border-blue-200" 
-                    : "text-slate-500 bg-slate-100 border-slate-200"
-                   }`}>
-                  {products.filter(m => m.mainProductId === product.id).length} Linked
+                <span
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                    supplierProducts.filter((m) => m.mainProductId === product.id).length > 0
+                      ? "text-blue-600 bg-blue-50 border-blue-200"
+                      : "text-slate-500 bg-slate-100 border-slate-200"
+                  }`}
+                >
+                  {
+                    supplierProducts.filter((m) => m.mainProductId === product.id).length
+                  }{" "}
+                  Linked
                 </span>
               </div>
               <div className="col-span-1 text-right">

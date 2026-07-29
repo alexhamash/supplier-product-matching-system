@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import { Search,Plus,RefreshCw,FileSpreadsheet, CheckCircle2 } from "lucide-react";
 
@@ -6,18 +6,16 @@ import { getSuppliers } from "../services/supplierService";
 import { useProducts } from "../context/ProductContext";
 import type { Supplier } from "../types";
 
-const Suppliers = () => {
-  // const [suppliers, setSuppliers] = useState([]);
-
+const Suppliers: React.FC = () => {
   const {supplier, setSupplier, updateSupplier } = useProducts()
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState<string>("");
 
-  const [formData, setFormData] = useState({
-    name: "", 
+  const [formData, setFormData] = useState<{ name: string; sheetUrl: string }>({
+    name: "",
     sheetUrl: "",
   });
 
-  const [isFormVisible, setIsFormVisible] = useState(false);
+  const [isFormVisible, setIsFormVisible] = useState<boolean>(false);
 
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -30,13 +28,13 @@ const Suppliers = () => {
       const data = getSuppliers();
       setSupplier(data);
     }
-  }, []); // Виконується 1 раз
+  }, [setSupplier]); // Виконується 1 раз
 
   useEffect(() => {
     localStorage.setItem("suppliers", JSON.stringify(supplier));
   }, [supplier]); 
 
-  const handleInputChange = (e: any) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -67,7 +65,7 @@ const Suppliers = () => {
   //   setFormData({ name: "", sheetUrl: "" });
   // };
 
-  const handleSubmit = () => {
+  const handleSubmit = (): void => {
 
     if (!formData.name.trim()) {
       alert("Назва постачальника обовязкова");
@@ -169,7 +167,7 @@ const Suppliers = () => {
             type="text"
             placeholder="Search suppliers..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
             className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50/50"
           />
         </div>

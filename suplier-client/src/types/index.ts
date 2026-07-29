@@ -79,6 +79,7 @@ export interface ProductContextState {
 
   setProducts: React.Dispatch<React.SetStateAction<MainProduct[]>>;
   setSupplier: React.Dispatch<React.SetStateAction<Supplier[]>>;
+  setActiveSupplier: React.Dispatch<React.SetStateAction<Supplier | null>>;
   setSupplierProducts: React.Dispatch<React.SetStateAction<SupplierProduct[]>>;
 
   loading: boolean;

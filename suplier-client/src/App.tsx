@@ -10,7 +10,7 @@ import SupplierImport from "./pages/SupplierImport"
 import { ProductProvider } from "./context/ProductContext";
 
  
-function App() {
+const App: React.FC = () => {
   return (
 
     <BrowserRouter>

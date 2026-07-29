@@ -3,13 +3,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import { getSuppliers, importSupplierData } from "../services/supplierService";
 import { ArrowLeft, RefreshCw, CheckCircle } from "lucide-react";
 import { useProducts } from "../context/ProductContext";
-import { Supplier, SupplierProduct } from "../types"
+import type { Supplier, SupplierProduct } from "../types"
 
-const SupplierImport = () => {
-  const { id } = useParams(); 
+const SupplierImport: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { supplier: allSuppliers, setSupplier, setSupplierProducts } = useProducts()
+  const { setSupplierProducts } = useProducts()
 
   const [currentSupplier, setCurrentSupplier] = useState<Supplier | null>(null)
 
@@ -19,17 +19,18 @@ const SupplierImport = () => {
   useEffect(() => {
     const found = getSuppliers().find((s) => s.id === Number(id));
     if (found) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCurrentSupplier(found);
     } else {
       navigate("/suppliers");
     }
   }, [id, navigate]);
 
-  const handleStartImport = () => {
+  const handleStartImport = (): void => {
     setIsImporting(true); 
     setImportResult(null);
 
-    importSupplierData(id)
+    importSupplierData(Number(id))
       .then((result) => { 
         setSupplierProducts((prev: SupplierProduct[]) => {
           const combined = [...prev, ...result.products];

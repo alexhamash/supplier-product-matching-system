@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Construction, LayoutDashboard, ArrowRight } from 'lucide-react';
 
-const Dashboard = () => {
+const Dashboard: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 text-center">
       {/* Іконка з анімацією */}
