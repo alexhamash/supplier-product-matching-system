@@ -1,29 +1,33 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, type ChangeEvent } from "react";
 import {
   Search,
   Filter,
   ChevronDown,
   ArrowRight,
-  CheckCircle2,
   AlertCircle,
-  Link as LinkIcon,
-  AlertTriangle,
   Package,
 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
-import { getSuppliers } from "../services/supplierService"; // Додав імпорт сервісу
+import { useNavigate } from "react-router-dom";
+import { getSuppliers } from "../services/supplierService";
+import type { SupplierProduct } from "../types";
 
-const SupplierProducts = () => {
-  const { id } = useParams(); // ID Постачальника з URL
+interface LocalProduct {
+  id: number | string;
+  name: string;
+  supplierSku?: string;
+  status?: string;
+  supplierName?: string;
+  [key: string]: unknown;
+}
 
-  const [products, setProducts] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [supplierName, setSupplierName] = useState("Supplier");
-  const [statusFilter, setStatusFilter] = useState("All Statuses");  
+const SupplierProducts: React.FC = () => {
+  const [products, setProducts] = useState<LocalProduct[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("All Statuses");
 
   useEffect(() => {
-    const allSuppliers = getSuppliers(); // Отримуємо список усіх постачальників [ {id: 1, name: '...'}, {id: 2, ...} ]
-    let allProducts = [];
+    const allSuppliers = getSuppliers();
+    let allProducts: LocalProduct[] = [];
 
     allSuppliers.forEach((supplier) => {
       const key = `supplier_products_${supplier.id}`;
@@ -32,33 +36,38 @@ const SupplierProducts = () => {
       if (savedData) {
         const parsedData = JSON.parse(savedData);
         if (Array.isArray(parsedData)) {
-          const productsWithBrand = parsedData.map(item => ({
-            ...item,
-            supplierName: supplier.name,
-          }));
-          allProducts = [...allProducts, ...productsWithBrand ]
+          const productsWithBrand: LocalProduct[] = parsedData.map(
+            (item: Record<string, unknown>) => ({
+              ...item,
+              supplierName: supplier.name,
+            } as LocalProduct),
+          );
+          allProducts = [...allProducts, ...productsWithBrand];
         }
       }
     });
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProducts(allProducts);
-  }, []); 
-
+  }, []);
 
   const filteredProducts = products.filter((p) => {
-    const nameMatch = (p.name || "").toLowerCase().includes(searchTerm.toLowerCase());
-    const skuMatch = (p.supplierSku || "").toLowerCase().includes(searchTerm.toLowerCase());
+    const nameMatch = (p.name || "")
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const skuMatch = (p.supplierSku || "")
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
 
     const currentStatus = (p.status || "unmatched").toLowerCase();
     const targetFilter = statusFilter.toLowerCase();
 
     const statusMatch =
-      statusFilter === "All Statuses" ||
-      currentStatus === targetFilter
+      statusFilter === "All Statuses" || currentStatus === targetFilter;
 
-    return (nameMatch || skuMatch) && statusMatch
-  })
-    
-  const navigate = useNavigate()
+    return (nameMatch || skuMatch) && statusMatch;
+  });
+
+  const navigate = useNavigate();
 
   return (
     <div className="w-full">
@@ -66,7 +75,7 @@ const SupplierProducts = () => {
       <div className="flex justify-between items-start mb-6">
         <div>
           <h1 className="text-[28px] font-bold text-[#0F172A] tracking-tight mb-1">
-            Supplier Products 
+            Supplier Products
           </h1>
           <p className="text-[#64748B] text-[15px]">
             View imported inventory and their matches to your main catalog.
@@ -87,7 +96,9 @@ const SupplierProducts = () => {
           <input
             type="text"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+              setSearchTerm(e.target.value)
+            }
             placeholder="Search by name or SKU..."
             className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
           />
@@ -99,10 +110,13 @@ const SupplierProducts = () => {
           </div>
 
           <div className="relative w-full sm:w-[160px]">
-            <select 
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="block w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-sm appearance-none bg-white cursor-pointer text-slate-700">
+            <select
+              value={statusFilter}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                setStatusFilter(e.target.value)
+              }
+              className="block w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg text-sm appearance-none bg-white cursor-pointer text-slate-700"
+            >
               <option>All Statuses</option>
               <option>Matched</option>
               <option>Unmatched</option>
@@ -136,7 +150,7 @@ const SupplierProducts = () => {
         <div className="divide-y divide-slate-100">
           {filteredProducts.map((product) => (
             <div
-              key={product.id}
+              key={String(product.id)}
               className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-50 transition-colors items-center"
             >
               {/* 1. Product Info */}
@@ -171,11 +185,14 @@ const SupplierProducts = () => {
 
               {/* 4. Action / Link */}
               <div className="col-span-4">
-                <button 
-                onClick={() => navigate(`/matching?supplierProductId=${product.id}`)}
-                className="w-full text-center py-2 px-3 border border-slate-300 border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-colors font-medium">
+                <button
+                  onClick={() =>
+                    navigate(`/matching?supplierProductId=${product.id}`)
+                  }
+                  className="w-full text-center py-2 px-3 border border-slate-300 border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-colors font-medium"
+                >
                   Find Match
-                </button> 
+                </button>
               </div>
             </div>
           ))}
@@ -193,4 +210,5 @@ const SupplierProducts = () => {
     </div>
   );
 };
+
 export default SupplierProducts;
