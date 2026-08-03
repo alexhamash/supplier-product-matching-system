@@ -1,9 +1,9 @@
 // ============================================================================
-// Domain Models
+// Domain Models (Frontend-facing)
 // ============================================================================
 
 export interface MainProduct {
-  id: number;
+  id: string;
   name: string;
   SKU: string;
   brand: string;
@@ -17,13 +17,13 @@ export interface SupplierProduct {
   price: number;
   status: 'matched' | 'unmatched';
   confidence?: number;
-  mainProductId?: number | null;
+  mainProductId?: string | null;
   supplierId?: number;
   supplierSku?: string;
 }
 
 export interface Supplier {
-  id: number;
+  id: string;
   name: string;
   sheetUrl: string;
   productsCount: number;
@@ -68,6 +68,170 @@ export interface ImportResponse {
 }
 
 // ============================================================================
+// Backend API DTOs (mirrors Prisma schema)
+// ============================================================================
+
+/** Main product as returned by the backend REST API. */
+export interface ApiMainProduct {
+  id: string;
+  sku: string;
+  name: string;
+  description: string | null;
+  price: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Supplier as returned by the backend REST API. */
+export interface ApiSupplier {
+  id: string;
+  name: string;
+  contactInfo: string | null;
+  productsCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Supplier product as returned by the backend REST API. */
+export interface ApiSupplierProduct {
+  id: string;
+  supplierId: string;
+  rawSku: string;
+  rawName: string;
+  price: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Match status enum values used by the backend. */
+export type ApiMatchStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+/** Product match as returned by the backend REST API. */
+export interface ApiProductMatch {
+  id: string;
+  mainProductId: string;
+  supplierProductId: string;
+  status: ApiMatchStatus;
+  confidenceScore: number | null;
+  createdAt: string;
+  updatedAt: string;
+  mainProduct?: Pick<ApiMainProduct, 'id' | 'sku' | 'name' | 'price'>;
+  supplierProduct?: Pick<
+    ApiSupplierProduct,
+    'id' | 'rawSku' | 'rawName' | 'price' | 'supplierId'
+  > & {
+    supplier?: Pick<ApiSupplier, 'id' | 'name'>;
+  };
+}
+
+/** Payload for creating a main product via the API. */
+export interface CreateMainProductPayload {
+  sku: string;
+  name: string;
+  description?: string;
+  price: number;
+}
+
+/** Payload for updating a main product via the API. */
+export interface UpdateMainProductPayload {
+  sku?: string;
+  name?: string;
+  description?: string | null;
+  price?: number;
+}
+
+/** Payload for creating a supplier via the API. */
+export interface CreateSupplierPayload {
+  name: string;
+  contactInfo?: string;
+}
+
+/** Payload for importing supplier products via the API. */
+export interface ImportSupplierProductsPayload {
+  products: {
+    rawSku: string;
+    rawName: string;
+    price: number;
+  }[];
+}
+
+/** Response from the supplier products import endpoint. */
+export interface ImportSupplierProductsResponse {
+  supplierId: string;
+  requestedCount: number;
+  importedCount: number;
+  skippedCount: number;
+}
+
+/** Payload for running the matching engine. */
+export interface RunMatchingPayload {
+  /** Optional supplier UUID. When omitted, matching runs for ALL suppliers. */
+  supplierId?: string;
+  confidenceThreshold?: number;
+}
+
+/** Payload for updating a match status. */
+export interface UpdateMatchStatusPayload {
+  status: 'APPROVED' | 'REJECTED';
+}
+
+/** Payload for directly linking a supplier product to a main product. */
+export interface LinkMatchPayload {
+  supplierProductId: string;
+  mainProductId: string;
+}
+
+/**
+ * A product match suggestion enriched with the supplier and main product
+ * details needed to render the matching table (names, SKUs, prices).
+ */
+export interface ProductMatch {
+  id: string;
+  status: ApiMatchStatus;
+  confidenceScore: number | null;
+  createdAt: string;
+  updatedAt: string;
+  /** The main (catalog) product side of the match. */
+  mainProduct: {
+    id: string;
+    sku: string;
+    name: string;
+    price: number;
+  };
+  /** The supplier product side of the match. */
+  supplierProduct: {
+    id: string;
+    rawSku: string;
+    rawName: string;
+    price: number;
+    supplierId: string;
+    supplier?: {
+      id: string;
+      name: string;
+    };
+  };
+}
+
+/** Response from running the matching engine for a single supplier. */
+export interface RunMatchingResult {
+  supplierId: string;
+  totalSupplierProducts: number;
+  matchesCreated: number;
+  matchesSkipped: number;
+}
+
+/** Response from running the matching engine across all suppliers. */
+export interface RunMatchingAllResult {
+  suppliersProcessed: number;
+  results: RunMatchingResult[];
+  totals: {
+    totalSupplierProducts: number;
+    matchesCreated: number;
+    matchesSkipped: number;
+  };
+}
+
+// ============================================================================
 // Context State Structures
 // ============================================================================
 
@@ -84,9 +248,12 @@ export interface ProductContextState {
 
   loading: boolean;
   setLoading: (loading: boolean) => void;
-  addProduct: (product: MainProduct) => void;
-  updateProduct: (product: MainProduct) => void;
-  updateSupplier: (supplier: Supplier) => void;
+  error: string | null;
+  setError: (error: string | null) => void;
+  refresh: () => Promise<void>;
+  addProduct: (product: MainProduct) => Promise<void>;
+  updateProduct: (product: MainProduct) => Promise<void>;
+  updateSupplier: (supplier: Supplier) => Promise<void>;
 }
 
 // ============================================================================

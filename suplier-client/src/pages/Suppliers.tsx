@@ -1,13 +1,12 @@
 import React, { useState, useEffect, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
-import { Search,Plus,RefreshCw,FileSpreadsheet, CheckCircle2 } from "lucide-react";
+import { Search,Plus,RefreshCw,FileSpreadsheet, CheckCircle2, Sparkles } from "lucide-react";
 
-import { getSuppliers } from "../services/supplierService";
+import { getSuppliers, createSupplier, importSupplierProducts, deleteSupplier } from "../services/supplierService";
 import { useProducts } from "../context/ProductContext";
-import type { Supplier } from "../types";
 
 const Suppliers: React.FC = () => {
-  const {supplier, setSupplier, updateSupplier } = useProducts()
+  const { supplier, updateSupplier, refresh } = useProducts()
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   const [formData, setFormData] = useState<{ name: string; sheetUrl: string }>({
@@ -17,22 +16,68 @@ const Suppliers: React.FC = () => {
 
   const [isFormVisible, setIsFormVisible] = useState<boolean>(false);
 
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const savedSuppliers = localStorage.getItem("suppliers");
+  const [demoLoading, setDemoLoading] = useState<boolean>(false);
 
-    if (savedSuppliers) {
-      setSupplier(JSON.parse(savedSuppliers));
-    } else {
-      const data = getSuppliers();
-      setSupplier(data);
+  /**
+   * Generate a demo supplier with a unique name and batch-import 5 sample products.
+   * Refreshes the supplier list from the backend after completion.
+   */
+  const handleGenerateDemo = async (): Promise<void> => {
+    setDemoLoading(true);
+    try {
+      // 1. Build the demo products payload
+      const demoProducts = [
+        { rawSku: "TSC-001", rawName: "Wireless Bluetooth Headphones", price: 49.99 },
+        { rawSku: "TSC-002", rawName: "USB-C Charging Cable 2m", price: 12.99 },
+        { rawSku: "TSC-003", rawName: "Laptop Stand Adjustable", price: 34.50 },
+        { rawSku: "TSC-004", rawName: "Mechanical Keyboard RGB", price: 89.99 },
+        { rawSku: "TSC-005", rawName: "Ergonomic Mouse Wireless", price: 29.99 },
+      ];
+
+      // 2. Use a unique name so creating demo data never triggers a 409 Conflict
+      //    (the backend enforces a unique constraint on supplier name).
+      const uniqueName = `Demo Tech Supplier ${Date.now()}`;
+
+      let targetSupplierId: string;
+
+      try {
+        const createdSupplier = await createSupplier({
+          name: uniqueName,
+          contactInfo: "https://demo-catalog.example.com/sheet",
+        });
+        targetSupplierId = createdSupplier.id;
+      } catch (createErr) {
+        // 3. Fallback: if creation failed (e.g. 409 Conflict), reuse the first
+        //    existing supplier instead of throwing an unhandled error.
+        console.warn("Demo supplier creation failed, falling back to existing supplier:", createErr);
+        const existingSuppliers = await getSuppliers();
+        const fallbackSupplier = existingSuppliers[0];
+        if (!fallbackSupplier) {
+          throw new Error("No existing supplier available to attach demo products to.");
+        }
+        targetSupplierId = fallbackSupplier.id;
+      }
+
+      // 4. Batch-import the 5 sample products for the resolved supplier
+      await importSupplierProducts(targetSupplierId, {
+        products: demoProducts,
+      });
+
+      // 5. Refresh the full supplier list from the backend
+      await refresh();
+    } catch (err) {
+      console.error("Failed to generate demo data:", err);
+      alert("Failed to generate demo supplier. Please check the console for details.");
+    } finally {
+      setDemoLoading(false);
     }
-  }, [setSupplier]); // Виконується 1 раз
+  };
 
   useEffect(() => {
-    localStorage.setItem("suppliers", JSON.stringify(supplier));
-  }, [supplier]); 
+    void refresh();
+  }, [refresh]); // Виконується 1 раз
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const { name, value } = e.target;
@@ -65,29 +110,36 @@ const Suppliers: React.FC = () => {
   //   setFormData({ name: "", sheetUrl: "" });
   // };
 
-  const handleSubmit = (): void => {
-
+  const handleSubmit = async (): Promise<void> => {
     if (!formData.name.trim()) {
       alert("Назва постачальника обовязкова");
       return;
     }
 
-    if(editingId) {
-      updateSupplier({...formData, id: editingId, productsCount: 0, status: 'Active', lastSync: null})
-    } else {
-      const newSupplier: Supplier = {
-        ...formData,
-        id: Date.now(),
-        productsCount: 0,
-        status: 'Active',
-        lastSync: null
+    try {
+      if (editingId) {
+        await updateSupplier({
+          ...formData,
+          id: editingId,
+          productsCount: 0,
+          status: 'Active',
+          lastSync: null,
+        });
+      } else {
+        await createSupplier({
+          name: formData.name,
+          contactInfo: formData.sheetUrl,
+        });
+        await refresh();
       }
-      setSupplier([...supplier, newSupplier])
+
+      setIsFormVisible(false);
+      setEditingId(null);
+      setFormData({ name: "", sheetUrl: "" });
+    } catch (err) {
+      console.error("Failed to save supplier:", err);
+      alert("Failed to save supplier. Please check the console for details.");
     }
-  
-    setIsFormVisible(false);
-    setEditingId(null);
-    setFormData({ name: "", sheetUrl: "" });
   };
 
   // const handleDelete = (id) => {
@@ -119,13 +171,23 @@ const Suppliers: React.FC = () => {
             Manage your connected suppliers and import catalogs.
           </p>
         </div>
-        <button
-          onClick={() => setIsFormVisible(!isFormVisible)}
-          className="bg-[#3B82F6] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-600 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          {isFormVisible ? "Cancel" : "Create New Supplier"}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleGenerateDemo}
+            disabled={demoLoading}
+            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Sparkles className={`w-4 h-4 ${demoLoading ? "animate-spin" : ""}`} />
+            {demoLoading ? "Generating..." : "Generate Demo Supplier with Products"}
+          </button>
+          <button
+            onClick={() => setIsFormVisible(!isFormVisible)}
+            className="bg-[#3B82F6] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-600 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            {isFormVisible ? "Cancel" : "Create New Supplier"}
+          </button>
+        </div>
       </div>
 
       {/* Форма додавання постачальника */}
@@ -238,11 +300,16 @@ const Suppliers: React.FC = () => {
                 </Link>
 
                 <button
-                  onClick={() => {
-                    if (window.confirm("Видалити цього постачальника?")) {
-                      const updatedSuppliers = supplier.filter((item) => item.id !== s.id);
-                      setSupplier(updatedSuppliers);
-                      localStorage.setItem("suppliers", JSON.stringify(updatedSuppliers));
+                  onClick={async () => {
+                    if (!window.confirm("Видалити цього постачальника?")) return;
+                    try {
+                      // Call the real DELETE /api/suppliers/:id endpoint
+                      await deleteSupplier(s.id);
+                      // Only update local state after a successful backend deletion
+                      await refresh();
+                    } catch (err) {
+                      console.error("Failed to delete supplier:", err);
+                      alert("Failed to delete supplier. Please check the console for details.");
                     }
                   }}
                   className="text-xs font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors"

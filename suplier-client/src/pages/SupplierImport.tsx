@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getSuppliers, importSupplierData } from "../services/supplierService";
+import { getSuppliers, getSupplierProducts } from "../services/supplierService";
 import { ArrowLeft, RefreshCw, CheckCircle } from "lucide-react";
 import { useProducts } from "../context/ProductContext";
 import type { Supplier, SupplierProduct } from "../types"
@@ -17,34 +17,39 @@ const SupplierImport: React.FC = () => {
   const [importResult, setImportResult] = useState<{ count: number } | null>(null);
 
   useEffect(() => {
-    const found = getSuppliers().find((s) => s.id === Number(id));
-    if (found) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCurrentSupplier(found);
-    } else {
-      navigate("/suppliers");
-    }
+    getSuppliers().then((allSuppliers) => {
+      const found = allSuppliers.find((s) => s.id === id);
+      if (found) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setCurrentSupplier(found);
+      } else {
+        navigate("/suppliers");
+      }
+    });
   }, [id, navigate]);
 
-  const handleStartImport = (): void => {
-    setIsImporting(true); 
+  const handleStartImport = async (): Promise<void> => {
+    if (!id) return;
+    setIsImporting(true);
     setImportResult(null);
 
-    importSupplierData(Number(id))
-      .then((result) => { 
-        setSupplierProducts((prev: SupplierProduct[]) => {
-          const combined = [...prev, ...result.products];
-          return combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-        });
-        setImportResult(result);
-      })
-      .catch((error) => {
+    try {
+      // Fetch the raw catalog products for this supplier from the backend.
+      const products = await getSupplierProducts(id);
 
-        console.error("Import error:", error);
-      })
-      .finally(() => {
-        setIsImporting(false); 
+      // Update the shared context with the fetched supplier products.
+      setSupplierProducts((prev: SupplierProduct[]) => {
+        const combined = [...prev, ...products];
+        return combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
       });
+
+      setImportResult({ count: products.length });
+    } catch (error) {
+      console.error("Import error:", error);
+      alert("Failed to import supplier products. Please check the console for details.");
+    } finally {
+      setIsImporting(false);
+    }
   };
 
 

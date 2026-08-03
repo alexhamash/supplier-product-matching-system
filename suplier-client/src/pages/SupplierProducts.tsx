@@ -8,7 +8,7 @@ import {
   Package,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getSuppliers } from "../services/supplierService";
+import { getSuppliers, getSupplierProducts } from "../services/supplierService";
 import type { SupplierProduct } from "../types";
 
 interface LocalProduct {
@@ -26,28 +26,37 @@ const SupplierProducts: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>("All Statuses");
 
   useEffect(() => {
-    const allSuppliers = getSuppliers();
-    let allProducts: LocalProduct[] = [];
+    let cancelled = false;
 
-    allSuppliers.forEach((supplier) => {
-      const key = `supplier_products_${supplier.id}`;
-      const savedData = localStorage.getItem(key);
+    const loadProducts = async (): Promise<void> => {
+      try {
+        const allSuppliers = await getSuppliers();
+        const allProducts: LocalProduct[] = [];
 
-      if (savedData) {
-        const parsedData = JSON.parse(savedData);
-        if (Array.isArray(parsedData)) {
-          const productsWithBrand: LocalProduct[] = parsedData.map(
-            (item: Record<string, unknown>) => ({
+        for (const supplier of allSuppliers) {
+          const supplierProducts = await getSupplierProducts(supplier.id);
+          const productsWithBrand: LocalProduct[] = supplierProducts.map(
+            (item) => ({
               ...item,
               supplierName: supplier.name,
             } as LocalProduct),
           );
-          allProducts = [...allProducts, ...productsWithBrand];
+          allProducts.push(...productsWithBrand);
         }
+
+        if (!cancelled) {
+          setProducts(allProducts);
+        }
+      } catch (err) {
+        console.error("Failed to load supplier products:", err);
       }
-    });
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setProducts(allProducts);
+    };
+
+    void loadProducts();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filteredProducts = products.filter((p) => {

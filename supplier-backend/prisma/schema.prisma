@@ -1,0 +1,97 @@
+// ─── Generator ──────────────────────────────────────────────────────────────
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Datasource ─────────────────────────────────────────────────────────────
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+enum MatchStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────
+
+/// Represents an authenticated user of the system.
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+
+  createdAt DateTime @default(now())
+
+  @@map("users")
+}
+
+/// Represents a supplier entity that provides product data.
+model Supplier {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  contactInfo String?
+
+  supplierProducts SupplierProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("suppliers")
+}
+
+/// Represents the canonical (master) product record in the system.
+model MainProduct {
+  id    String  @id @default(uuid())
+  sku   String  @unique
+  name  String
+  description String?
+  price Float
+
+  productMatches ProductMatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("main_products")
+}
+
+/// Represents a product as provided by a specific supplier.
+model SupplierProduct {
+  id         String   @id @default(uuid())
+  supplierId String
+  rawSku     String
+  rawName    String
+  price      Float
+
+  supplier  Supplier       @relation(fields: [supplierId], references: [id])
+  matches   ProductMatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([supplierId, rawSku])
+  @@map("supplier_products")
+}
+
+/// Represents a match (suggestion) linking a supplier product to a main product.
+model ProductMatch {
+  id              String      @id @default(uuid())
+  mainProductId   String
+  supplierProductId String
+  status          MatchStatus @default(PENDING)
+  confidenceScore Float?
+
+  mainProduct     MainProduct     @relation(fields: [mainProductId], references: [id])
+  supplierProduct SupplierProduct @relation(fields: [supplierProductId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([mainProductId, supplierProductId])
+  @@map("product_matches")
+}

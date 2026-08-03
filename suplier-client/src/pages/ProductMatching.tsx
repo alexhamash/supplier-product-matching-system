@@ -1,4 +1,4 @@
-import React, { useState, type ChangeEvent } from "react";
+import React, { useState, useEffect, useCallback, type ChangeEvent } from "react";
 import {
   Search,
   Plus,
@@ -9,20 +9,22 @@ import {
   XCircle,
   SearchCode,
   Package,
+  RefreshCw,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
-  createMatch,
+  runMatching,
+  linkMatch,
   getSupplierSuggestions,
 } from "../services/matchingService";
+import { getAllSupplierProducts } from "../services/supplierService";
 import { useProducts } from "../context/ProductContext";
-import type { SupplierProduct } from "../types";
+import type { MainProduct, SupplierProduct } from "../types";
 
 const ProductMatching: React.FC = () => {
   const {
     products,
-    supplierProducts,
-    setSupplierProducts,
+    supplier,
     setProducts,
     loading,
   } = useProducts();
@@ -31,82 +33,144 @@ const ProductMatching: React.FC = () => {
   const [showLinked, setShowLinked] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [supplierProducts, setSupplierProducts] = useState<SupplierProduct[]>([]);
+  const [productsLoading, setProductsLoading] = useState<boolean>(false);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [runningAuto, setRunningAuto] = useState<boolean>(false);
+
+  // Map of supplierProductId -> mainProductId representing confirmed links.
+  const [linkedMap, setLinkedMap] = useState<Record<string, string>>({});
+
+  // Load supplier products from the backend for all suppliers.
+  const loadSupplierProducts = useCallback(async (): Promise<void> => {
+    setProductsLoading(true);
+    try {
+      const all = await getAllSupplierProducts(supplier);
+      // Deduplicate supplier products by unique ID before setting state.
+      const uniqueAll = Array.from(
+        new Map(all.map((p) => [p.id, p])).values(),
+      );
+      setSupplierProducts(uniqueAll);
+    } catch (err) {
+      console.error("Failed to load supplier products:", err);
+      toast.error("Не вдалося завантажити товари постачальників");
+    } finally {
+      setProductsLoading(false);
+    }
+  }, [supplier]);
+
+  useEffect(() => {
+    if (supplier.length > 0) {
+      void loadSupplierProducts();
+    }
+  }, [supplier, loadSupplierProducts]);
 
   if (loading) return <div>Завантаження...</div>;
 
   const selectedProduct = products[activeItem] || null;
 
-  const unmatchedProducts = supplierProducts.filter(
-    (p) => p.status !== "matched",
-  );
+  // A supplier product is "matched" if it has a confirmed link in linkedMap.
+  const isMatched = (p: SupplierProduct): boolean =>
+    Boolean(linkedMap[p.id as string]);
+
+  const unmatchedProducts = supplierProducts.filter((p) => !isMatched(p));
 
   const finalItems = !showLinked
     ? selectedProduct
       ? getSupplierSuggestions(selectedProduct, unmatchedProducts)
       : []
     : supplierProducts.filter(
-        (p) =>
-          p.status === "matched" && p.mainProductId === selectedProduct?.id,
+        (p) => isMatched(p) && linkedMap[p.id as string] === selectedProduct?.id,
       );
 
   const uniqueSuppliersCount = new Set(
     supplierProducts
       .filter(
-        (p) =>
-          p.status === "matched" && p.mainProductId === selectedProduct?.id,
+        (p) => isMatched(p) && linkedMap[p.id as string] === selectedProduct?.id,
       )
       .map((p) => p.supplierId),
   ).size;
 
-  const handleLink = (supplierProduct: SupplierProduct): void => {
-    if (!selectedProduct) return;
+  /**
+   * Verify that a main product has a real, non-empty database ID before it is
+   * sent to the backend. A client-generated timestamp or empty string would not
+   * correspond to a real `MainProduct` row and would cause a 404 on linking.
+   */
+  const hasValidMainProductId = (product: MainProduct | null): boolean =>
+    Boolean(product && product.id && product.id.trim() !== "");
 
-    const sId = supplierProduct.supplierId || 1;
-    createMatch(selectedProduct.id, supplierProduct.id, sId);
+  /**
+   * Link a specific supplier product to the selected main product via the
+   * backend `POST /api/matching/link` endpoint.
+   */
+  const handleLink = async (supplierProduct: SupplierProduct): Promise<void> => {
+    if (!selectedProduct) {
+      toast.error("Оберіть основний товар для зв'язування");
+      return;
+    }
 
-    setSupplierProducts(
-      supplierProducts.map((p) =>
-        p.id === supplierProduct.id
-          ? { ...p, status: "matched", mainProductId: selectedProduct.id }
-          : p,
-      ),
-    );
+    if (!hasValidMainProductId(selectedProduct)) {
+      console.error(
+        "Cannot link: selected main product has no valid database ID.",
+        selectedProduct,
+      );
+      toast.error("Основний товар не має дійсного ID у базі даних");
+      return;
+    }
 
-    setProducts(
-      products.map((p) =>
-        p.id === selectedProduct.id
-          ? { ...p, linkedCount: (p.linkedCount || 0) + 1 }
-          : p,
-      ),
-    );
+    setLinkingId(String(supplierProduct.id));
+    try {
+      await linkMatch({
+        supplierProductId: String(supplierProduct.id),
+        mainProductId: String(selectedProduct.id),
+      });
 
-    toast.success(`Зв'язано: ${supplierProduct.name}`, {
-      duration: 4000,
-      style: {
-        border: "1px solid #10B981",
-        padding: "16px",
-        color: "#064E3B",
-        background: "#ECFDF5",
-        fontWeight: "600",
-        borderRadius: "12px",
-      },
-      iconTheme: {
-        primary: "#10B981",
-        secondary: "#FFFAEE",
-      },
-    });
+      // Record the link locally so the UI reflects it immediately.
+      setLinkedMap((prev) => ({
+        ...prev,
+        [String(supplierProduct.id)]: String(selectedProduct.id),
+      }));
+
+      setProducts(
+        products.map((p) =>
+          p.id === selectedProduct.id
+            ? { ...p, linkedCount: (p.linkedCount || 0) + 1 }
+            : p,
+        ),
+      );
+
+      toast.success(`Зв'язано: ${supplierProduct.name}`, {
+        duration: 4000,
+        style: {
+          border: "1px solid #10B981",
+          padding: "16px",
+          color: "#064E3B",
+          background: "#ECFDF5",
+          fontWeight: "600",
+          borderRadius: "12px",
+        },
+        iconTheme: {
+          primary: "#10B981",
+          secondary: "#FFFAEE",
+        },
+      });
+    } catch (err) {
+      console.error("Failed to link supplier product:", err);
+      toast.error("Не вдалося зв'язати товар");
+    } finally {
+      setLinkingId(null);
+    }
   };
 
-  const handleUnlink = (supplierProduct: SupplierProduct): void => {
-    createMatch(null as unknown as number, supplierProduct.id, supplierProduct.supplierId || 1);
-
-    setSupplierProducts(
-      supplierProducts.map((p) =>
-        p.id === supplierProduct.id
-          ? { ...p, status: "unmatched", mainProductId: null }
-          : p,
-      ),
-    );
+  /**
+   * Unlink a supplier product from the selected main product.
+   */
+  const handleUnlink = async (supplierProduct: SupplierProduct): Promise<void> => {
+    setLinkedMap((prev) => {
+      const next = { ...prev };
+      delete next[String(supplierProduct.id)];
+      return next;
+    });
 
     if (selectedProduct) {
       setProducts(
@@ -119,6 +183,27 @@ const ProductMatching: React.FC = () => {
     }
 
     toast.error(`Зв'язок розірвано: ${supplierProduct.name}`);
+  };
+
+  /**
+   * Run the auto-matching engine for all suppliers, then reload the list.
+   */
+  const handleAutoLinkAll = async (): Promise<void> => {
+    setRunningAuto(true);
+    try {
+      const result = await runMatching({});
+      const created =
+        "totals" in result ? result.totals.matchesCreated : result.matchesCreated;
+      toast.success(`Авто-співставлення завершено: створено ${created} збігів`, {
+        duration: 4000,
+      });
+      await loadSupplierProducts();
+    } catch (err) {
+      console.error("Failed to run auto-matching:", err);
+      toast.error("Не вдалося запустити авто-співставлення");
+    } finally {
+      setRunningAuto(false);
+    }
   };
 
   const filteredMainProducts = products.filter((product): boolean => {
@@ -150,13 +235,25 @@ const ProductMatching: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => void loadSupplierProducts()}
+            disabled={productsLoading}
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${productsLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
           <button className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
             <Plus className="w-4 h-4" />
             New Main Product
           </button>
-          <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
-            <Sparkles className="w-4 h-4" />
-            Auto-Link All (AI)
+          <button
+            onClick={() => void handleAutoLinkAll()}
+            disabled={runningAuto}
+            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm"
+          >
+            <Sparkles className={`w-4 h-4 ${runningAuto ? "animate-pulse" : ""}`} />
+            {runningAuto ? "Running..." : "Auto-Link All (AI)"}
           </button>
         </div>
       </div>
@@ -214,7 +311,7 @@ const ProductMatching: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50/50">
             {filteredMainProducts.map((item, index) => (
               <div
-                key={item.id}
+                key={item.id ? `${item.id}-${index}` : index}
                 onClick={() => setActiveItem(index)}
                 className={`cursor-pointer p-4 rounded-xl border-2 transition-all ${
                   activeItem === index
@@ -237,7 +334,7 @@ const ProductMatching: React.FC = () => {
                 <div className="flex items-center justify-between text-xs mt-2">
                   <span className="text-slate-600 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                    {item.brand}
+                    {item.brand || "—"}
                   </span>
                   <span
                     className={`font-medium px-1.5 py-0.5 rounded border ${
@@ -251,6 +348,11 @@ const ProductMatching: React.FC = () => {
                 </div>
               </div>
             ))}
+            {filteredMainProducts.length === 0 && (
+              <div className="text-center py-10 text-slate-400 italic">
+                No main products found
+              </div>
+            )}
           </div>
         </div>
 
@@ -296,7 +398,7 @@ const ProductMatching: React.FC = () => {
                       Brand
                     </p>
                     <p className="text-sm font-medium text-slate-800">
-                      {selectedProduct?.brand}
+                      {selectedProduct?.brand || "—"}
                     </p>
                   </div>
                   <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
@@ -304,7 +406,7 @@ const ProductMatching: React.FC = () => {
                       Category
                     </p>
                     <p className="text-sm font-medium text-slate-800">
-                      Smartphones
+                      {selectedProduct?.category || "—"}
                     </p>
                   </div>
                 </div>
@@ -369,85 +471,95 @@ const ProductMatching: React.FC = () => {
                 )}
               </h4>
 
-              <div className="space-y-4">
-                {finalItems.length > 0 ? (
-                  finalItems.map((item) => {
-                    const confidence = (item as { confidence?: number }).confidence ?? 0;
-                    return (<div
-                      key={item.id}
-                      className={`border rounded-xl p-5 transition-all relative overflow-hidden ${
-                        confidence > 70
-                          ? "border-emerald-200 bg-emerald-50/40"
-                          : confidence > 30
-                            ? "border-amber-200 bg-amber-50/40"
-                            : "border-slate-200 bg-white"
-                      }`}
-                    >
-                      {/* Badge з відсотком схожості */}
-                      <div>
-                        {showLinked ? (
-                          <div className="absolute top-0 right-0 text-[10px] font-bold px-3 py-1 rounded-bl-lg bg-emerald-50 text-emerald-700 border-l border-b border-emerald-100 uppercase tracking-wide">
-                            Currently Linked
-                          </div>
-                        ) : (
-                          <div
-                            className={`absolute top-0 right-0 text-[10px] font-bold px-3 py-1 rounded-bl-lg border-b border-l uppercase tracking-wide ${
-                              confidence > 70
-                                ? "bg-emerald-100 text-emerald-800 border-emerald-200"
-                                : "bg-amber-100 text-amber-800 border-amber-200"
-                            }`}
-                          >
-                            {confidence}% Match
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-start gap-5">
-                        <div className="w-16 h-16 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-sm">
-                          <span className="text-xs font-bold text-slate-400">
-                            IMG
-                          </span>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <h5 className="text-lg font-bold text-slate-900">
-                              {item.name}
-                            </h5>
-                            <span className="text-emerald-600 font-bold text-lg">
-                              ${item.price}
-                            </span>
-                          </div>
-                          <div className="flex gap-3 mt-4">
+              {productsLoading ? (
+                <div className="text-center py-10 text-slate-400 italic">
+                  Loading supplier products...
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {finalItems.length > 0 ? (
+                    finalItems.map((item, index) => {
+                      const confidence = (item as { confidence?: number }).confidence ?? 0;
+                      const isLinking = linkingId === String(item.id);
+                      return (
+                        <div
+                          key={item.id ? `${item.id}-${index}` : index}
+                          className={`border rounded-xl p-5 transition-all relative overflow-hidden ${
+                            confidence > 70
+                              ? "border-emerald-200 bg-emerald-50/40"
+                              : confidence > 30
+                                ? "border-amber-200 bg-amber-50/40"
+                                : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          {/* Badge з відсотком схожості */}
+                          <div>
                             {showLinked ? (
-                              <button
-                                onClick={() => handleUnlink(item)}
-                                className="flex-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-all hover:border-rose-300"
-                              >
-                                <XCircle className="w-4 h-4" />
-                                Unlink from Product
-                              </button>
+                              <div className="absolute top-0 right-0 text-[10px] font-bold px-3 py-1 rounded-bl-lg bg-emerald-50 text-emerald-700 border-l border-b border-emerald-100 uppercase tracking-wide">
+                                Currently Linked
+                              </div>
                             ) : (
-                              <button
-                                onClick={() => handleLink(item)}
-                                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-all"
+                              <div
+                                className={`absolute top-0 right-0 text-[10px] font-bold px-3 py-1 rounded-bl-lg border-b border-l uppercase tracking-wide ${
+                                  confidence > 70
+                                    ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                                    : "bg-amber-100 text-amber-800 border-amber-200"
+                                }`}
                               >
-                                <CheckCircle2 className="w-4 h-4" />
-                                Link to Main Product
-                              </button>
+                                {confidence}% Match
+                              </div>
                             )}
                           </div>
+
+                          <div className="flex items-start gap-5">
+                            <div className="w-16 h-16 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-sm">
+                              <span className="text-xs font-bold text-slate-400">
+                                IMG
+                              </span>
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-1">
+                                <h5 className="text-lg font-bold text-slate-900">
+                                  {item.name}
+                                </h5>
+                                <span className="text-emerald-600 font-bold text-lg">
+                                  ${item.price}
+                                </span>
+                              </div>
+                              <div className="flex gap-3 mt-4">
+                                {showLinked ? (
+                                  <button
+                                    onClick={() => handleUnlink(item)}
+                                    className="flex-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-all hover:border-rose-300"
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                    Unlink from Product
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleLink(item)}
+                                    disabled={isLinking}
+                                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-all"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    {isLinking ? "Linking..." : "Link to Main Product"}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>);
-                  }))
-                : (
-                  <div className="text-center py-10 text-slate-400 italic">
-                    {!showLinked
-                      ? "No suggestions found for this item"
-                      : "No products linked to this item yet"}
-                  </div>
-                )}
-              </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-10 text-slate-400 italic">
+                      {!showLinked
+                        ? "No suggestions found for this item"
+                        : "No products linked to this item yet"}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

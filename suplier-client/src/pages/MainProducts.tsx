@@ -23,9 +23,14 @@ const MainProducts: React.FC = () => {
   });
 
   const [isFormVisible, setIsFormVisible] = useState<boolean>(false);
-  const [editingProductId, setEditingProductId] = useState<number | null>(null);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
-  const filteredProducts = products.filter(
+  // Deduplicate products by unique ID before filtering to avoid duplicate keys.
+  const uniqueProducts = Array.from(
+    new Map(products.map((p) => [p.id, p])).values(),
+  );
+
+  const filteredProducts = uniqueProducts.filter(
     (product) =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.SKU.toLowerCase().includes(searchTerm.toLowerCase()),
@@ -36,42 +41,41 @@ const MainProducts: React.FC = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (): void => {
+  const handleSubmit = async (): Promise<void> => {
     if (!formData.name.trim() || !formData.SKU.trim()) {
       alert("Заповність поля");
       return;
     }
 
-    const isDuplicate = products.some(
-      (p) => p.SKU === formData.SKU.trim() && p.id !== editingProductId,
-    );
-    if (isDuplicate) {
-      alert("Товар існує з таким SKU");
-      return;
-    }
+    try {
+      if (editingProductId) {
+        const updatedProduct: MainProduct = {
+          id: editingProductId,
+          name: formData.name,
+          SKU: formData.SKU,
+          brand: formData.brand,
+          category: formData.category || undefined,
+          linkedCount: 0,
+        };
+        await updateProduct(updatedProduct);
+      } else {
+        const newProduct: MainProduct = {
+          ...formData,
+          // The backend assigns the real UUID on creation; this placeholder is
+          // only used locally and is never sent to the API.
+          id: "",
+          linkedCount: 0,
+        };
+        await addProduct(newProduct);
+      }
 
-    if (editingProductId) {
-      const updatedProduct: MainProduct = {
-        id: editingProductId,
-        name: formData.name,
-        SKU: formData.SKU,
-        brand: formData.brand,
-        category: formData.category || undefined,
-        linkedCount: 0,
-      };
-      updateProduct(updatedProduct);
-    } else {
-      const newProduct: MainProduct = {
-        ...formData,
-        id: Date.now(),
-        linkedCount: 0,
-      };
-      addProduct(newProduct);
+      setIsFormVisible(false);
+      setEditingProductId(null);
+      setFormData({ name: "", SKU: "", brand: "", category: "" });
+    } catch (err) {
+      console.error("Failed to save product:", err);
+      alert("Failed to save product. Please check the console for details.");
     }
-
-    setIsFormVisible(false);
-    setEditingProductId(null);
-    setFormData({ name: "", SKU: "", brand: "", category: "" });
   };
 
   const handleEdit = (product: MainProduct): void => {
@@ -178,9 +182,9 @@ const MainProducts: React.FC = () => {
 
         {/* Table Body */}
         <div className="divide-y divide-slate-100">
-          {filteredProducts.map((product) => (
+          {filteredProducts.map((product, index) => (
             <div
-              key={product.id}
+              key={product.id ? `${product.id}-${index}` : index}
               className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-slate-50 transition-colors items-center"
             >
               <div className="col-span-4 flex items-start gap-3">
