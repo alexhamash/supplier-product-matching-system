@@ -1,7 +1,8 @@
 import React, { useState, type ChangeEvent } from "react";
-import { Search, Plus, Package } from "lucide-react";
+import { Search, Plus, Package, Table2 } from "lucide-react";
 import { useProducts } from "../context/ProductContext";
 import type { MainProduct } from "../types";
+import SupplierMatrixModal from "../components/SupplierMatrixModal";
 
 interface FormData {
   name: string;
@@ -24,6 +25,9 @@ const MainProducts: React.FC = () => {
 
   const [isFormVisible, setIsFormVisible] = useState<boolean>(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+
+  // The main product currently being inspected in the Supplier Matrix modal.
+  const [matrixProduct, setMatrixProduct] = useState<MainProduct | null>(null);
 
   // Deduplicate products by unique ID before filtering to avoid duplicate keys.
   const uniqueProducts = Array.from(
@@ -220,10 +224,18 @@ const MainProducts: React.FC = () => {
                   Linked
                 </span>
               </div>
-              <div className="col-span-1 text-right">
+              <div className="col-span-1 text-right flex items-center justify-end gap-2">
+                <button
+                  onClick={() => setMatrixProduct(product)}
+                  className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  title="View supplier matrix"
+                >
+                  <Table2 className="w-4 h-4" />
+                  Matrix
+                </button>
                 <button
                   onClick={() => handleEdit(product)}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  className="text-slate-500 hover:text-slate-700 text-sm font-medium"
                 >
                   Edit
                 </button>
@@ -232,6 +244,15 @@ const MainProducts: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Supplier Matrix modal */}
+      {matrixProduct && (
+        <SupplierMatrixModal
+          mainProductId={matrixProduct.id}
+          mainProductName={matrixProduct.name}
+          onClose={() => setMatrixProduct(null)}
+        />
+      )}
     </div>
   );
 };

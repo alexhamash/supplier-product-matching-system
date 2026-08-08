@@ -298,3 +298,62 @@ export interface ProductContextState {
 export type SupplierStatus = 'Active' | 'Pending' | 'Error';
 
 export type ProductMatchStatus = 'matched' | 'unmatched';
+
+// ============================================================================
+// Supplier Matrix View (Product Intelligence Modal)
+// ============================================================================
+
+/** Match status values returned by the matrix endpoint. */
+export type MatrixMatchStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+/** Basic info about the main product shown in the matrix header. */
+export interface MatrixMainProduct {
+  id: string;
+  sku: string;
+  title: string;
+  description: string | null;
+  /** The main product's base / target price. */
+  basePrice: number;
+  category: string | null;
+}
+
+/** A single matched supplier offer within the matrix. */
+export interface MatrixOffer {
+  matchId: string;
+  status: MatrixMatchStatus;
+  supplierId: string;
+  supplierName: string;
+  supplierSku: string;
+  supplierTitle: string;
+  /** Purchase cost from the supplier. */
+  price: number;
+  inStock: boolean;
+  /** Similarity score (0.0 – 1.0, e.g. 0.95 = 95%). */
+  matchScore: number;
+  /** Difference between the supplier price and the main product base price. */
+  priceDiff: number;
+  updatedAt: string;
+  lastSyncedAt: string | null;
+}
+
+/** Aggregated summary statistics for the matrix header cards. */
+export interface MatrixSummary {
+  /** Lowest available supplier price (null when there are no offers). */
+  lowestPrice: number | null;
+  /** Average supplier price (null when there are no offers). */
+  averagePrice: number | null;
+  /** Total number of matched supplier offers. */
+  totalSuppliers: number;
+  /** Number of offers currently in stock. */
+  inStockCount: number;
+}
+
+/** Full payload returned by GET /api/main-products/:id/matrix. */
+export interface SupplierMatrix {
+  mainProduct: MatrixMainProduct;
+  summary: MatrixSummary;
+  offers: MatrixOffer[];
+}
+
+/** Sort options for the matrix comparison table. */
+export type MatrixSortKey = 'lowestPrice' | 'matchScore' | 'inStock';

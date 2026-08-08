@@ -192,3 +192,99 @@ export const deleteMainProduct = async (
     next(err);
   }
 };
+
+/**
+ * GET /api/main-products/:id/matrix
+ * Retrieve the consolidated Supplier Matrix for a single main product.
+ *
+ * Returns the main product's basic info plus an array of matched supplier
+ * offers (price, stock status, match score, margin indicators) so the client
+ * can render a read-only comparison table.
+ */
+export const getMainProductMatrix = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+
+    // Fetch the main product (404 if missing)
+    const mainProduct = await prisma.mainProduct.findUnique({ where: { id } });
+    if (!mainProduct) {
+      throw new AppError(`Main product with id '${id}' not found.`, 404);
+    }
+
+    // Fetch all matches for this main product, enriched with the supplier
+    // product and its supplier. We include ALL statuses so the analyst can see
+    // pending suggestions alongside approved links.
+    const matches = await prisma.productMatch.findMany({
+      where: { mainProductId: id },
+      include: {
+        supplierProduct: {
+          include: {
+            supplier: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Build the offer list, computing margin indicators relative to the main
+    // product's base/target price.
+    const offers = matches.map((match) => {
+      const sp = match.supplierProduct;
+      const priceDiff = sp.price - mainProduct.price;
+
+      return {
+        matchId: match.id,
+        status: match.status,
+        supplierId: sp.supplierId,
+        supplierName: sp.supplier.name,
+        supplierSku: sp.rawSku,
+        supplierTitle: sp.rawName,
+        price: sp.price,
+        inStock: sp.inStock,
+        matchScore: match.confidenceScore ?? 0,
+        priceDiff,
+        // Margin indicator: negative = cheaper than base price (favourable),
+        // positive = more expensive than base price.
+        updatedAt: sp.updatedAt.toISOString(),
+        lastSyncedAt: sp.supplier.lastSyncedAt?.toISOString() ?? null,
+      };
+    });
+
+    // ─── Summary statistics ────────────────────────────────────────────────
+    const prices = offers.map((o) => o.price);
+    const lowestPrice = prices.length > 0 ? Math.min(...prices) : null;
+    const averagePrice =
+      prices.length > 0
+        ? prices.reduce((sum, p) => sum + p, 0) / prices.length
+        : null;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        mainProduct: {
+          id: mainProduct.id,
+          sku: mainProduct.sku,
+          title: mainProduct.name,
+          description: mainProduct.description,
+          basePrice: mainProduct.price,
+          category: mainProduct.description ?? null,
+        },
+        summary: {
+          lowestPrice,
+          averagePrice,
+          totalSuppliers: offers.length,
+          inStockCount: offers.filter((o) => o.inStock).length,
+        },
+        offers,
+      },
+      total: offers.length,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+};

@@ -9,6 +9,7 @@ import type {
   ApiMainProduct,
   CreateMainProductPayload,
   UpdateMainProductPayload,
+  SupplierMatrix,
 } from '../types';
 
 // ─── Mapping helpers ────────────────────────────────────────────────────────
@@ -88,4 +89,17 @@ export const updateMainProduct = async (
  */
 export const deleteMainProduct = async (id: string): Promise<void> => {
   await apiClient.del(`main-products/${id}`);
+};
+
+/**
+ * GET /api/main-products/:id/matrix
+ * Retrieve the consolidated Supplier Matrix for a single main product.
+ *
+ * @param id - The backend UUID of the main product.
+ * @returns The matrix payload (main product info, summary stats, and offers).
+ */
+export const getMainProductMatrix = async (
+  id: string,
+): Promise<SupplierMatrix> => {
+  return apiClient.get<SupplierMatrix>(`main-products/${id}/matrix`);
 };
