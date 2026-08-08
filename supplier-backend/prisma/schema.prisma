@@ -16,6 +16,12 @@ enum MatchStatus {
   REJECTED
 }
 
+/// The type of price feed a supplier provides.
+enum FeedType {
+  CSV
+  GOOGLE_SHEETS
+}
+
 // ─── Models ─────────────────────────────────────────────────────────────────
 
 /// Represents an authenticated user of the system.
@@ -35,6 +41,16 @@ model Supplier {
   id          String   @id @default(uuid())
   name        String   @unique
   contactInfo String?
+
+  // ─── Feed / Ingestion Settings ────────────────────────────────────────────
+  /// URL to the Google Sheet or CSV price feed.
+  feedUrl String?
+  /// Feed type — either a raw CSV file or a Google Sheet.
+  feedType FeedType @default(CSV)
+  /// Toggle for automated periodic (cron) ingestion.
+  autoSync Boolean @default(false)
+  /// Timestamp of the last successful import.
+  lastSyncedAt DateTime?
 
   supplierProducts SupplierProduct[]
 
@@ -67,6 +83,8 @@ model SupplierProduct {
   rawSku     String
   rawName    String
   price      Float
+  /// Whether the product is currently available in the supplier's feed.
+  inStock    Boolean  @default(true)
 
   supplier  Supplier       @relation(fields: [supplierId], references: [id])
   matches   ProductMatch[]

@@ -1,0 +1,181 @@
+import type { Request, Response, NextFunction } from "express";
+import { prisma } from "../lib/prisma";
+import { AppError } from "../middlewares/errorHandler";
+import { ingestSupplierFeed } from "../services/ingestionService";
+import { toGoogleSheetsCsvUrl } from "../services/feedParser";
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+type FeedConfigBody = {
+  feedUrl?: string;
+  feedType?: "CSV" | "GOOGLE_SHEETS";
+  autoSync?: boolean;
+};
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const VALID_FEED_TYPES = ["CSV", "GOOGLE_SHEETS"] as const;
+
+/**
+ * Validate the feed-config request body.
+ * Returns an array of validation error messages (empty = valid).
+ */
+const validateFeedConfig = (body: Record<string, unknown>): string[] => {
+  const errors: string[] = [];
+
+  if (body.feedUrl !== undefined) {
+    if (typeof body.feedUrl !== "string" || body.feedUrl.trim() === "") {
+      errors.push("Field 'feedUrl' must be a non-empty string when provided.");
+    }
+  }
+
+  if (body.feedType !== undefined) {
+    if (
+      typeof body.feedType !== "string" ||
+      !VALID_FEED_TYPES.includes(body.feedType as (typeof VALID_FEED_TYPES)[number])
+    ) {
+      errors.push(
+        `Field 'feedType' must be one of: ${VALID_FEED_TYPES.join(", ")}.`,
+      );
+    }
+  }
+
+  if (body.autoSync !== undefined && typeof body.autoSync !== "boolean") {
+    errors.push("Field 'autoSync' must be a boolean when provided.");
+  }
+
+  return errors;
+};
+
+// ─── Controller Methods ─────────────────────────────────────────────────────
+
+/**
+ * POST /api/suppliers/:id/sync
+ * Trigger an immediate manual sync for a specific supplier.
+ *
+ * Fetches the configured feed, upserts products, handles out-of-stock
+ * transitions, recalculates matches for new products, and updates
+ * `lastSyncedAt`.
+ */
+export const syncSupplierFeed = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+   const supplierId = req.params.id as string;
+
+   console.log(
+     "[IMPORT STARTED] Triggered import for supplier:",
+     req.params.id || req.body,
+   );
+
+   const supplier = await prisma.supplier.findUnique({
+      where: { id: supplierId },
+    });
+    if (!supplier) {
+      throw new AppError(`Supplier with id '${supplierId}' not found.`, 404);
+    }
+
+    if (!supplier.feedUrl) {
+      throw new AppError(
+        `Supplier '${supplier.name}' has no feedUrl configured. ` +
+          `Set a feed URL via PATCH /api/suppliers/${supplierId}/feed-config before syncing.`,
+        400,
+      );
+    }
+
+    const result = await ingestSupplierFeed(supplierId);
+
+    res.status(200).json({
+      success: true,
+      message: `Feed sync completed for supplier '${supplier.name}'.`,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * PATCH /api/suppliers/:id/feed-config
+ * Update the feed configuration for a supplier:
+ *   - feedUrl: URL to the Google Sheet or CSV file.
+ *   - feedType: 'CSV' | 'GOOGLE_SHEETS'.
+ *   - autoSync: toggle for automated cron ingestion.
+ */
+export const updateSupplierFeedConfig = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const supplierId = req.params.id as string;
+    const body = req.body as FeedConfigBody;
+
+    // Validate input
+    const validationErrors = validateFeedConfig(body);
+    if (validationErrors.length > 0) {
+      throw new AppError(validationErrors.join(" "), 400);
+    }
+
+    // Verify the supplier exists
+    const existing = await prisma.supplier.findUnique({
+      where: { id: supplierId },
+    });
+    if (!existing) {
+      throw new AppError(`Supplier with id '${supplierId}' not found.`, 404);
+    }
+
+    // Build the update payload
+    const data: {
+      feedUrl?: string | null;
+      feedType?: "CSV" | "GOOGLE_SHEETS";
+      autoSync?: boolean;
+    } = {};
+
+    if (body.feedUrl !== undefined) {
+      data.feedUrl = body.feedUrl.trim() === "" ? null : body.feedUrl.trim();
+    }
+    if (body.feedType !== undefined) {
+      data.feedType = body.feedType;
+    }
+    if (body.autoSync !== undefined) {
+      data.autoSync = body.autoSync;
+    }
+
+    // If a Google Sheets URL is provided, validate it can be converted to a
+    // CSV export URL so we fail fast on malformed URLs.
+    const effectiveFeedType = data.feedType ?? existing.feedType;
+    if (data.feedUrl && effectiveFeedType === "GOOGLE_SHEETS") {
+      if (!toGoogleSheetsCsvUrl(data.feedUrl)) {
+        throw new AppError(
+          "Field 'feedUrl' is not a valid Google Sheets URL for feedType 'GOOGLE_SHEETS'.",
+          400,
+        );
+      }
+    }
+
+    const supplier = await prisma.supplier.update({
+      where: { id: supplierId },
+      data,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Supplier feed configuration updated successfully.",
+      data: {
+        id: supplier.id,
+        name: supplier.name,
+        feedUrl: supplier.feedUrl,
+        feedType: supplier.feedType,
+        autoSync: supplier.autoSync,
+        lastSyncedAt: supplier.lastSyncedAt,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+};

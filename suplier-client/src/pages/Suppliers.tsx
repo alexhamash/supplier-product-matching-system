@@ -1,17 +1,23 @@
 import React, { useState, useEffect, type ChangeEvent } from "react";
-import { Link } from "react-router-dom";
-import { Search,Plus,RefreshCw,FileSpreadsheet, CheckCircle2, Sparkles } from "lucide-react";
+import { Search,Plus,RefreshCw,FileSpreadsheet, CheckCircle2, Sparkles, Zap, Clock } from "lucide-react";
 
-import { getSuppliers, createSupplier, importSupplierProducts, deleteSupplier } from "../services/supplierService";
+import { getSuppliers, createSupplier, importSupplierProducts, deleteSupplier, syncSupplier } from "../services/supplierService";
 import { useProducts } from "../context/ProductContext";
 
 const Suppliers: React.FC = () => {
   const { supplier, updateSupplier, refresh } = useProducts()
   const [searchTerm, setSearchTerm] = useState<string>("");
 
-  const [formData, setFormData] = useState<{ name: string; sheetUrl: string }>({
+  const [formData, setFormData] = useState<{
+    name: string;
+    sheetUrl: string;
+    feedType: "CSV" | "GOOGLE_SHEETS";
+    autoSync: boolean;
+  }>({
     name: "",
     sheetUrl: "",
+    feedType: "GOOGLE_SHEETS",
+    autoSync: false,
   });
 
   const [isFormVisible, setIsFormVisible] = useState<boolean>(false);
@@ -19,6 +25,35 @@ const Suppliers: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [demoLoading, setDemoLoading] = useState<boolean>(false);
+
+  /** Set of supplier ids currently running a manual sync (for per-row spinner). */
+  const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
+
+  /**
+   * Trigger the backend ingestion pipeline for a single supplier:
+   * POST /api/suppliers/:id/sync → fetches the feed, upserts products,
+   * handles out-of-stock transitions, recalculates matches, updates lastSyncedAt.
+   */
+  const handleSync = async (supplierId: string): Promise<void> => {
+    setSyncingIds((prev) => new Set(prev).add(supplierId));
+    try {
+      await syncSupplier(supplierId);
+      await refresh();
+    } catch (err) {
+      console.error("Sync failed for supplier:", supplierId, err);
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to sync supplier. Please check the console for details.";
+      alert(message);
+    } finally {
+      setSyncingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(supplierId);
+        return next;
+      });
+    }
+  };
 
   /**
    * Generate a demo supplier with a unique name and batch-import 5 sample products.
@@ -79,9 +114,16 @@ const Suppliers: React.FC = () => {
     void refresh();
   }, [refresh]); // Виконується 1 раз
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ): void => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    const { name, checked } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: checked }));
   };
 
   // const handleSubmit = () => {
@@ -129,13 +171,16 @@ const Suppliers: React.FC = () => {
         await createSupplier({
           name: formData.name,
           contactInfo: formData.sheetUrl,
+          feedUrl: formData.sheetUrl,
+          feedType: formData.feedType,
+          autoSync: formData.autoSync,
         });
         await refresh();
       }
 
       setIsFormVisible(false);
       setEditingId(null);
-      setFormData({ name: "", sheetUrl: "" });
+      setFormData({ name: "", sheetUrl: "", feedType: "GOOGLE_SHEETS", autoSync: false });
     } catch (err) {
       console.error("Failed to save supplier:", err);
       alert("Failed to save supplier. Please check the console for details.");
@@ -209,8 +254,42 @@ const Suppliers: React.FC = () => {
               value={formData.sheetUrl}
               onChange={handleInputChange}
               className="p-2 border border-slate-200 rounded-lg text-sm"
-              placeholder="Sheet URL"
+              placeholder="Sheet URL or CSV URL"
             />
+
+            {/* Feed type selector */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">
+                Feed Type
+              </label>
+              <select
+                name="feedType"
+                value={formData.feedType}
+                onChange={handleInputChange}
+                className="w-full p-2 border border-slate-200 rounded-lg text-sm bg-white"
+              >
+                <option value="GOOGLE_SHEETS">Google Sheets</option>
+                <option value="CSV">CSV File</option>
+              </select>
+            </div>
+
+            {/* Auto Sync toggle */}
+            <div className="flex items-end pb-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  name="autoSync"
+                  checked={formData.autoSync}
+                  onChange={handleCheckboxChange}
+                  className="w-4 h-4 accent-blue-600"
+                />
+                <span className="text-sm font-medium text-slate-700 flex items-center gap-1">
+                  <Zap className="w-4 h-4 text-amber-500" />
+                  Auto Sync
+                </span>
+              </label>
+            </div>
+
             <button
               onClick={handleSubmit} // Кнопка додати
               className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg font-medium transition-colors"
@@ -241,7 +320,7 @@ const Suppliers: React.FC = () => {
           <div className="col-span-3">Supplier Name</div>
           <div className="col-span-4">Catalog Source</div>
           <div className="col-span-2">Products</div>
-          <div className="col-span-2">Status</div>
+          <div className="col-span-2">Auto Sync</div>
           <div className="col-span-1 text-center">Actions</div>
         </div>
 
@@ -285,19 +364,41 @@ const Suppliers: React.FC = () => {
               </div>
 
               <div className="col-span-2">
-                <div className="flex items-center gap-1.5 text-emerald-700 text-sm font-medium">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Synced
+                <div className="flex items-center gap-1.5 mb-1">
+                  {s.autoSync ? (
+                    <span className="inline-flex items-center gap-1.5 text-amber-700 text-sm font-medium">
+                      <Zap className="w-4 h-4 text-amber-500" /> Auto Sync
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-slate-500 text-sm font-medium">
+                      <CheckCircle2 className="w-4 h-4 text-slate-400" /> Manual
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 text-xs text-slate-500">
+                  <Clock className="w-3.5 h-3.5" />
+                  {s.lastSyncedAt
+                    ? `Last synced ${new Date(s.lastSyncedAt).toLocaleString()}`
+                    : "Never synced"}
                 </div>
               </div>
 
               <div className="col-span-1 flex justify-end gap-2 items-center">
-                {/* Існуюча кнопка імпорту */}
-                <Link
-                  to={`/suppliers/${s.id}/import`}
-                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                {/* Кнопка синхронізації: викликає POST /api/suppliers/:id/sync */}
+                <button
+                  onClick={() => handleSync(s.id)}
+                  disabled={syncingIds.has(s.id)}
+                  title="Sync / Import from feed"
+                  className={`p-2 rounded-lg transition-colors ${
+                    syncingIds.has(s.id)
+                      ? "text-blue-500 bg-blue-50 cursor-wait"
+                      : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                  }`}
                 >
-                  <RefreshCw className="w-4 h-4" />
-                </Link>
+                  <RefreshCw
+                    className={`w-4 h-4 ${syncingIds.has(s.id) ? "animate-spin" : ""}`}
+                  />
+                </button>
 
                 <button
                   onClick={async () => {
@@ -318,7 +419,12 @@ const Suppliers: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
-                    setFormData({ name: s.name, sheetUrl: s.sheetUrl });
+                    setFormData({
+                      name: s.name,
+                      sheetUrl: s.sheetUrl,
+                      feedType: s.feedType ?? "GOOGLE_SHEETS",
+                      autoSync: s.autoSync ?? false,
+                    });
                     setEditingId(s.id);
                     setIsFormVisible(true);
                   }}

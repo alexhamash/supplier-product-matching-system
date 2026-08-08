@@ -29,6 +29,12 @@ export interface Supplier {
   productsCount: number;
   status: string;
   lastSync: string | null;
+  /** Feed type: 'CSV' | 'GOOGLE_SHEETS'. */
+  feedType?: 'CSV' | 'GOOGLE_SHEETS';
+  /** Whether automated (cron) ingestion is enabled for this supplier. */
+  autoSync?: boolean;
+  /** Timestamp of the last successful feed import. */
+  lastSyncedAt?: string | null;
 }
 
 export interface MatchResult {
@@ -90,6 +96,10 @@ export interface ApiSupplier {
   productsCount: number;
   createdAt: string;
   updatedAt: string;
+  feedUrl?: string | null;
+  feedType?: 'CSV' | 'GOOGLE_SHEETS';
+  autoSync?: boolean;
+  lastSyncedAt?: string | null;
 }
 
 /** Supplier product as returned by the backend REST API. */
@@ -144,6 +154,31 @@ export interface UpdateMainProductPayload {
 export interface CreateSupplierPayload {
   name: string;
   contactInfo?: string;
+  feedUrl?: string;
+  feedType?: 'CSV' | 'GOOGLE_SHEETS';
+  autoSync?: boolean;
+}
+
+/** Payload for updating a supplier's feed configuration via the API. */
+export interface UpdateFeedConfigPayload {
+  feedUrl?: string;
+  feedType?: 'CSV' | 'GOOGLE_SHEETS';
+  autoSync?: boolean;
+}
+
+/** Response from the supplier feed sync endpoint. */
+export interface SyncSupplierResponse {
+  supplierId: string;
+  supplierName: string;
+  feedUrl: string;
+  feedType: string;
+  totalRows: number;
+  skippedRows: number;
+  created: number;
+  updated: number;
+  markedOutOfStock: number;
+  unchanged: number;
+  syncedAt: string;
 }
 
 /** Payload for importing supplier products via the API. */

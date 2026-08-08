@@ -4,6 +4,10 @@ import {
   createSupplier,
   deleteSupplier,
 } from "../controllers/supplierController";
+import {
+  syncSupplierFeed,
+  updateSupplierFeedConfig,
+} from "../controllers/feedController";
 
 const router = Router();
 
@@ -15,5 +19,11 @@ router.post("/", createSupplier);
 
 // DELETE /api/suppliers/:id   → Delete a supplier by ID
 router.delete("/:id", deleteSupplier);
+
+// POST   /api/suppliers/:id/sync          → Trigger an immediate manual feed sync
+router.post("/:id/sync", syncSupplierFeed);
+
+// PATCH  /api/suppliers/:id/feed-config   → Update feedUrl / feedType / autoSync
+router.patch("/:id/feed-config", updateSupplierFeedConfig);
 
 export default router;

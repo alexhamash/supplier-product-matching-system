@@ -13,6 +13,7 @@ import {
   globalErrorHandler,
 } from "./middlewares/errorHandler";
 import { prisma } from "./lib/prisma";
+import { startCronService } from "./services/cronService";
 
 dotenv.config();
 
@@ -72,6 +73,14 @@ const start = async (): Promise<void> => {
   } catch (err) {
     console.error('[server] WARNING: Database connection failed — the server will start but DB-dependent routes will error.');
     console.error('[server] DB Error:', (err as Error).message);
+  }
+
+  // Start the automated price-feed ingestion cron job.
+  // Disable by setting DISABLE_CRON=true in the environment.
+  if (process.env.DISABLE_CRON !== "true") {
+    startCronService();
+  } else {
+    console.log("[server] Automated sync cron job disabled (DISABLE_CRON=true).");
   }
 
   app.listen(PORT, () => {

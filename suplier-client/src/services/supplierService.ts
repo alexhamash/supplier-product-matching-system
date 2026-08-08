@@ -8,6 +8,8 @@
 //   DELETE /api/suppliers/:id
 //   POST   /api/suppliers/:id/products   (batch import)
 //   GET    /api/suppliers/:id/products   (fetch imported products)
+//   POST   /api/suppliers/:id/sync       (manual feed sync)
+//   PATCH  /api/suppliers/:id/feed-config (update feed settings)
 
 import { apiClient } from './api';
 import type {
@@ -18,6 +20,8 @@ import type {
   CreateSupplierPayload,
   ImportSupplierProductsPayload,
   ImportSupplierProductsResponse,
+  UpdateFeedConfigPayload,
+  SyncSupplierResponse,
 } from '../types';
 
 // ─── Mapping helpers ────────────────────────────────────────────────────────
@@ -36,6 +40,9 @@ const toSupplier = (api: ApiSupplier): Supplier => ({
   productsCount: api.productsCount,
   status: 'Active',
   lastSync: api.updatedAt ?? null,
+  feedType: api.feedType ?? 'CSV',
+  autoSync: api.autoSync ?? false,
+  lastSyncedAt: api.lastSyncedAt ?? null,
 });
 
 const toSuppliers = (list: ApiSupplier[]): Supplier[] =>
@@ -78,6 +85,38 @@ export const createSupplier = async (
   payload: CreateSupplierPayload,
 ): Promise<Supplier> => {
   const data = await apiClient.post<ApiSupplier>('suppliers', payload);
+  return toSupplier(data);
+};
+
+/**
+ * POST /api/suppliers/:id/sync
+ * Trigger an immediate manual sync for a specific supplier.
+ *
+ * @param supplierId - The backend UUID of the supplier.
+ * @returns The ingestion result summary.
+ */
+export const syncSupplier = async (
+  supplierId: string,
+): Promise<SyncSupplierResponse> => {
+  return apiClient.post<SyncSupplierResponse>(`suppliers/${supplierId}/sync`);
+};
+
+/**
+ * PATCH /api/suppliers/:id/feed-config
+ * Update the feed configuration (feedUrl / feedType / autoSync) for a supplier.
+ *
+ * @param supplierId - The backend UUID of the supplier.
+ * @param payload - Feed settings to update.
+ * @returns The updated supplier mapped to the frontend shape.
+ */
+export const updateSupplierFeedConfig = async (
+  supplierId: string,
+  payload: UpdateFeedConfigPayload,
+): Promise<Supplier> => {
+  const data = await apiClient.patch<ApiSupplier>(
+    `suppliers/${supplierId}/feed-config`,
+    payload,
+  );
   return toSupplier(data);
 };
 

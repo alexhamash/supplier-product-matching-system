@@ -7,6 +7,9 @@ import { AppError } from "../middlewares/errorHandler";
 type SupplierBody = {
   name: string;
   contactInfo?: string;
+  feedUrl?: string;
+  feedType?: "CSV" | "GOOGLE_SHEETS";
+  autoSync?: boolean;
 };
 
 /**
@@ -92,6 +95,9 @@ export const createSupplier = async (
       data: {
         name: body.name.trim(),
         contactInfo: body.contactInfo?.trim() ?? null,
+        feedUrl: body.feedUrl?.trim() || null,
+        feedType: body.feedType ?? "CSV",
+        autoSync: body.autoSync ?? false,
       },
     });
 
