@@ -20,6 +20,30 @@ export type ParseFeedResult = {
   skippedRows: number;
 };
 
+/**
+ * Manual column mapping for a feed, expressed as spreadsheet column letters.
+ * e.g. { skuCol: "A", titleCol: "B", priceCol: "C" }.
+ */
+export type FeedColumnMapping = {
+  skuCol?: string;
+  titleCol?: string;
+  priceCol?: string;
+};
+
+/**
+ * Advanced feed parsing options that override the default header-based mapping.
+ */
+export type FeedParseOptions = {
+  /** Google Sheet tab/gid ID to export (appended to the export URL). */
+  sheetGid?: string | null;
+  /** Number of header rows to skip before parsing products (default 1). */
+  startRow?: number | null;
+  /** Manual column definitions (letters) used instead of header search. */
+  customMapping?: FeedColumnMapping | null;
+  /** Comma-separated negative keywords; rows whose title contains any are skipped. */
+  stopWords?: string | null;
+};
+
 // ─── Header Mapping ─────────────────────────────────────────────────────────
 
 /**
@@ -145,7 +169,10 @@ export const parsePrice = (value: unknown): number | null => {
  *
  * Returns `null` if the URL is not a valid Google Sheets URL.
  */
-export const toGoogleSheetsCsvUrl = (url: string): string | null => {
+export const toGoogleSheetsCsvUrl = (
+  url: string,
+  sheetGid?: string | null,
+): string | null => {
   const trimmed = url.trim();
 
   // Match /spreadsheets/d/{id} optionally followed by /edit, /view, /export, etc.
@@ -155,21 +182,30 @@ export const toGoogleSheetsCsvUrl = (url: string): string | null => {
   if (!match) return null;
 
   const spreadsheetId = match[1];
-  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv`;
+
+  // Append the specific tab/gid when provided so the export targets that tab.
+  const gidParam = sheetGid && sheetGid.trim() !== ""
+    ? `&gid=${encodeURIComponent(sheetGid.trim())}`
+    : "";
+
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv${gidParam}`;
 };
 
 /**
  * Resolve the final download URL for a feed based on its type.
  * Google Sheets URLs are converted to CSV export URLs; CSV URLs are used as-is.
+ * When a `sheetGid` is provided for a Google Sheets feed, it is appended to the
+ * export URL to target a specific tab.
  */
 export const resolveFeedUrl = (
   feedUrl: string,
   feedType: FeedType,
+  sheetGid?: string | null,
 ): string => {
   const trimmed = feedUrl.trim();
 
   if (feedType === "GOOGLE_SHEETS") {
-    const csvUrl = toGoogleSheetsCsvUrl(trimmed);
+    const csvUrl = toGoogleSheetsCsvUrl(trimmed, sheetGid);
     if (csvUrl) return csvUrl;
   }
 
@@ -201,70 +237,152 @@ export const fetchCsvText = async (url: string): Promise<string> => {
 };
 
 /**
+ * Convert a spreadsheet column letter (e.g. "A", "B", "AA") to a zero-based index.
+ * Returns `null` for invalid input.
+ */
+const columnLetterToIndex = (letter: string): number | null => {
+  const value = (letter || "").trim().toUpperCase();
+  if (!/^[A-Z]+$/.test(value)) return null;
+
+  let index = 0;
+  for (const char of value) {
+    index = index * 26 + (char.charCodeAt(0) - 64);
+  }
+  return index - 1;
+};
+
+/**
+ * Parse comma-separated stop words into a trimmed, lowercased array.
+ * Empty / whitespace-only entries are dropped.
+ */
+const parseStopWords = (stopWords?: string | null): string[] => {
+  if (!stopWords) return [];
+  return stopWords
+    .split(",")
+    .map((w) => w.trim().toLowerCase())
+    .filter((w) => w !== "");
+};
+
+/**
  * Parse raw CSV text into structured product rows.
  *
- * Uses flexible header mapping so that suppliers can use any of the supported
- * column aliases (e.g. `sku`, `артикул`, `код`, ...).
+ * Supports advanced feed configuration:
+ *   - `startRow`: number of header rows to skip before parsing products.
+ *   - `customMapping`: manual column letters (e.g. { skuCol: "A", ... }) used
+ *     instead of the dynamic header search.
+ *   - `stopWords`: comma-separated negative keywords; rows whose title contains
+ *     any keyword are skipped.
+ *
+ * When `customMapping` is not provided, the first non-skipped row is treated as
+ * the header row and columns are resolved by flexible header aliases.
  *
  * A row is considered valid if it has a non-empty SKU and a parseable price.
  * The name is optional and defaults to the SKU if missing.
  */
-export const parseCsvProducts = (csvText: string): ParseFeedResult => {
+export const parseCsvProducts = (
+  csvText: string,
+  options?: FeedParseOptions,
+): ParseFeedResult => {
+  const startRow = options?.startRow ?? 1;
+  const customMapping = options?.customMapping ?? null;
+  const stopWords = parseStopWords(options?.stopWords);
+
+  // Parse as raw arrays so we can honour startRow and custom column mapping.
   const records = parse(csvText, {
-    columns: true,
     skip_empty_lines: true,
     trim: true,
     bom: true,
     relax_column_count: true,
-  }) as Record<string, string>[];
+  }) as string[][];
 
   if (records.length === 0) {
     return { products: [], skippedRows: 0 };
   }
 
-  const headers = Object.keys(records[0]);
+  // Skip the first `startRow - 1` rows (vendor headers, banners, contact info).
+  const dataRows = records.slice(Math.max(0, startRow - 1));
 
-  const skuColumn = resolveColumn(headers, SKU_HEADERS);
-  const nameColumn = resolveColumn(headers, NAME_HEADERS);
-  const priceColumn = resolveColumn(headers, PRICE_HEADERS);
+  if (dataRows.length === 0) {
+    return { products: [], skippedRows: 0 };
+  }
 
-  // Debug logging to help diagnose header-mapping issues.
-  console.log(
-    `[feedParser] Raw CSV headers: ${JSON.stringify(headers)}`,
-  );
-  console.log(
-    `[feedParser] Resolved columns → SKU: ${skuColumn ?? "MISSING"}, ` +
-      `Name: ${nameColumn ?? "none"}, Price: ${priceColumn ?? "MISSING"}`,
-  );
+  // ─── Column resolution ────────────────────────────────────────────────────
+  let skuIndex: number | null = null;
+  let nameIndex: number | null = null;
+  let priceIndex: number | null = null;
 
-  // If we cannot find a SKU or price column, we cannot build products.
-  if (!skuColumn || !priceColumn) {
-    throw new Error(
-      `Could not find required columns in feed. ` +
-        `SKU column: ${skuColumn ?? "missing"}, Price column: ${priceColumn ?? "missing"}. ` +
-        `Available headers: ${headers.join(", ")}`,
+  if (customMapping) {
+    // Manual mapping: convert column letters to indices.
+    skuIndex = customMapping.skuCol ? columnLetterToIndex(customMapping.skuCol) : null;
+    nameIndex = customMapping.titleCol ? columnLetterToIndex(customMapping.titleCol) : null;
+    priceIndex = customMapping.priceCol ? columnLetterToIndex(customMapping.priceCol) : null;
+  } else {
+    // Header-based mapping: the first data row is the header row.
+    const headers = dataRows[0];
+    const skuColumn = resolveColumn(headers, SKU_HEADERS);
+    const nameColumn = resolveColumn(headers, NAME_HEADERS);
+    const priceColumn = resolveColumn(headers, PRICE_HEADERS);
+
+    skuIndex = skuColumn ? headers.indexOf(skuColumn) : -1;
+    nameIndex = nameColumn ? headers.indexOf(nameColumn) : -1;
+    priceIndex = priceColumn ? headers.indexOf(priceColumn) : -1;
+
+    // Debug logging to help diagnose header-mapping issues.
+    console.log(
+      `[feedParser] Raw CSV headers: ${JSON.stringify(headers)}`,
+    );
+    console.log(
+      `[feedParser] Resolved columns → SKU: ${skuColumn ?? "MISSING"}, ` +
+        `Name: ${nameColumn ?? "none"}, Price: ${priceColumn ?? "MISSING"}`,
     );
   }
+
+  // If we cannot find a SKU or price column, we cannot build products.
+  if (skuIndex === null || skuIndex < 0 || priceIndex === null || priceIndex < 0) {
+    const available = customMapping
+      ? `customMapping: ${JSON.stringify(customMapping)}`
+      : `Available headers: ${JSON.stringify(dataRows[0])}`;
+    throw new Error(
+      `Could not find required columns in feed. ` +
+        `SKU column: ${skuIndex === null || skuIndex < 0 ? "missing" : "ok"}, ` +
+        `Price column: ${priceIndex === null || priceIndex < 0 ? "missing" : "ok"}. ` +
+        available,
+    );
+  }
+
+  // When using header-based mapping, skip the header row itself.
+  const productRows = customMapping ? dataRows : dataRows.slice(1);
 
   const products: ParsedFeedProduct[] = [];
   let skippedRows = 0;
 
-  for (const record of records) {
-    const sku = (record[skuColumn] ?? "").trim();
-    const price = parsePrice(record[priceColumn]);
+  for (const record of productRows) {
+    const sku = (record[skuIndex] ?? "").trim();
+    const price = parsePrice(record[priceIndex]);
+    const name = nameIndex !== null && nameIndex >= 0
+      ? (record[nameIndex] ?? "").trim()
+      : "";
 
     if (sku === "" || price === null) {
       skippedRows++;
       continue;
     }
 
-    const name = nameColumn
-      ? (record[nameColumn] ?? "").trim()
-      : "";
+    const title = name || sku;
+
+    // Stop-word filtering: skip rows whose title contains any negative keyword.
+    if (stopWords.length > 0) {
+      const lowerTitle = title.toLowerCase();
+      const matched = stopWords.some((word) => lowerTitle.includes(word));
+      if (matched) {
+        skippedRows++;
+        continue;
+      }
+    }
 
     products.push({
       sku,
-      name: name || sku,
+      name: title,
       price,
     });
   }
@@ -284,13 +402,15 @@ export const parseCsvProducts = (csvText: string): ParseFeedResult => {
 
 /**
  * High-level helper: fetch a feed (Google Sheets or CSV) and parse it into
- * structured product rows.
+ * structured product rows, honouring advanced feed options (gid, startRow,
+ * customMapping, stopWords).
  */
 export const fetchAndParseFeed = async (
   feedUrl: string,
   feedType: FeedType,
+  options?: FeedParseOptions,
 ): Promise<ParseFeedResult> => {
-  const resolvedUrl = resolveFeedUrl(feedUrl, feedType);
+  const resolvedUrl = resolveFeedUrl(feedUrl, feedType, options?.sheetGid);
   const csvText = await fetchCsvText(resolvedUrl);
-  return parseCsvProducts(csvText);
+  return parseCsvProducts(csvText, options);
 };

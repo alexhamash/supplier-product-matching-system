@@ -43,6 +43,10 @@ const toSupplier = (api: ApiSupplier): Supplier => ({
   feedType: api.feedType ?? 'CSV',
   autoSync: api.autoSync ?? false,
   lastSyncedAt: api.lastSyncedAt ?? null,
+  sheetGid: api.sheetGid ?? null,
+  startRow: api.startRow ?? 1,
+  customMapping: api.customMapping ?? null,
+  stopWords: api.stopWords ?? null,
 });
 
 const toSuppliers = (list: ApiSupplier[]): Supplier[] =>

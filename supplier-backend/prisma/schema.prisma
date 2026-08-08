@@ -52,6 +52,16 @@ model Supplier {
   /// Timestamp of the last successful import.
   lastSyncedAt DateTime?
 
+  // ─── Advanced Feed Configuration ──────────────────────────────────────────
+  /// Specific Google Sheet tab/gid ID (e.g. '0' or '18492049').
+  sheetGid String?
+  /// Number of header rows to skip before parsing products (default 1).
+  startRow Int @default(1)
+  /// Manual column definitions, e.g. { skuCol: "A", titleCol: "B", priceCol: "C" }.
+  customMapping Json?
+  /// Comma-separated negative keywords used to ignore rows (e.g. "чохол, скло").
+  stopWords String?
+
   supplierProducts SupplierProduct[]
 
   createdAt DateTime @default(now())

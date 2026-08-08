@@ -13,11 +13,25 @@ const Suppliers: React.FC = () => {
     sheetUrl: string;
     feedType: "CSV" | "GOOGLE_SHEETS";
     autoSync: boolean;
+    sheetGid: string;
+    startRow: string;
+    useCustomMapping: boolean;
+    skuCol: string;
+    titleCol: string;
+    priceCol: string;
+    stopWords: string;
   }>({
     name: "",
     sheetUrl: "",
     feedType: "GOOGLE_SHEETS",
     autoSync: false,
+    sheetGid: "",
+    startRow: "1",
+    useCustomMapping: false,
+    skuCol: "A",
+    titleCol: "B",
+    priceCol: "C",
+    stopWords: "",
   });
 
   const [isFormVisible, setIsFormVisible] = useState<boolean>(false);
@@ -29,6 +43,18 @@ const Suppliers: React.FC = () => {
   /** Set of supplier ids currently running a manual sync (for per-row spinner). */
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
 
+  /** Toast notification state: { type, message } or null when hidden. */
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  /**
+   * Show a toast notification and auto-dismiss it after a short delay.
+   * Re-triggering resets the timer so rapid consecutive syncs don't stack.
+   */
+  const showToast = (type: "success" | "error", message: string): void => {
+    setToast({ type, message });
+    window.setTimeout(() => setToast(null), 4000);
+  };
+
   /**
    * Trigger the backend ingestion pipeline for a single supplier:
    * POST /api/suppliers/:id/sync → fetches the feed, upserts products,
@@ -37,7 +63,12 @@ const Suppliers: React.FC = () => {
   const handleSync = async (supplierId: string): Promise<void> => {
     setSyncingIds((prev) => new Set(prev).add(supplierId));
     try {
-      await syncSupplier(supplierId);
+      const result = await syncSupplier(supplierId);
+      const count = result.created + result.updated + result.unchanged;
+      showToast(
+        "success",
+        `Successfully synced ${count} products for ${result.supplierName}!`,
+      );
       await refresh();
     } catch (err) {
       console.error("Sync failed for supplier:", supplierId, err);
@@ -45,7 +76,7 @@ const Suppliers: React.FC = () => {
         err instanceof Error
           ? err.message
           : "Failed to sync supplier. Please check the console for details.";
-      alert(message);
+      showToast("error", message);
     } finally {
       setSyncingIds((prev) => {
         const next = new Set(prev);
@@ -160,27 +191,64 @@ const Suppliers: React.FC = () => {
 
     try {
       if (editingId) {
+        const startRowNum = parseInt(formData.startRow, 10);
         await updateSupplier({
-          ...formData,
           id: editingId,
+          name: formData.name,
+          sheetUrl: formData.sheetUrl,
+          feedType: formData.feedType,
+          autoSync: formData.autoSync,
           productsCount: 0,
           status: 'Active',
           lastSync: null,
+          sheetGid: formData.sheetGid.trim() || null,
+          startRow: Number.isNaN(startRowNum) || startRowNum < 1 ? 1 : startRowNum,
+          customMapping: formData.useCustomMapping
+            ? {
+                skuCol: formData.skuCol.trim() || undefined,
+                titleCol: formData.titleCol.trim() || undefined,
+                priceCol: formData.priceCol.trim() || undefined,
+              }
+            : null,
+          stopWords: formData.stopWords.trim() || null,
         });
       } else {
+        const startRowNum = parseInt(formData.startRow, 10);
         await createSupplier({
           name: formData.name,
           contactInfo: formData.sheetUrl,
           feedUrl: formData.sheetUrl,
           feedType: formData.feedType,
           autoSync: formData.autoSync,
+          sheetGid: formData.sheetGid.trim() || undefined,
+          startRow: Number.isNaN(startRowNum) || startRowNum < 1 ? 1 : startRowNum,
+          customMapping: formData.useCustomMapping
+            ? {
+                skuCol: formData.skuCol.trim() || undefined,
+                titleCol: formData.titleCol.trim() || undefined,
+                priceCol: formData.priceCol.trim() || undefined,
+              }
+            : undefined,
+          stopWords: formData.stopWords.trim() || undefined,
         });
         await refresh();
       }
 
       setIsFormVisible(false);
       setEditingId(null);
-      setFormData({ name: "", sheetUrl: "", feedType: "GOOGLE_SHEETS", autoSync: false });
+      setFormData({
+        name: "",
+        sheetUrl: "",
+        feedType: "GOOGLE_SHEETS",
+        autoSync: false,
+        sheetGid: "",
+        startRow: "1",
+        useCustomMapping: false,
+        skuCol: "A",
+        titleCol: "B",
+        priceCol: "C",
+        stopWords: "",
+      });
     } catch (err) {
       console.error("Failed to save supplier:", err);
       alert("Failed to save supplier. Please check the console for details.");
@@ -206,6 +274,33 @@ const Suppliers: React.FC = () => {
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-12">
+      {/* Toast notification */}
+      {toast && (
+        <div
+          className={`fixed top-5 right-5 z-50 flex items-start gap-3 max-w-sm px-4 py-3 rounded-lg shadow-lg border text-sm font-medium animate-[fadeIn_0.2s_ease-out] ${
+            toast.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-red-50 border-red-200 text-red-800"
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          {toast.type === "success" ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
+          ) : (
+            <span className="w-5 h-5 shrink-0 mt-0.5 text-red-500 font-bold text-center leading-5">!</span>
+          )}
+          <span className="break-words">{toast.message}</span>
+          <button
+            onClick={() => setToast(null)}
+            className="ml-1 text-slate-400 hover:text-slate-600 shrink-0 font-bold"
+            aria-label="Dismiss notification"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Header - залишаємо як був */}
       <div className="flex justify-between items-start mb-6">
         <div>
@@ -288,6 +383,133 @@ const Suppliers: React.FC = () => {
                   Auto Sync
                 </span>
               </label>
+            </div>
+
+            {/* Advanced Feed Settings */}
+            <div className="col-span-2 mt-2 border-t border-slate-200 pt-4">
+              <details className="group">
+                <summary className="flex items-center gap-2 cursor-pointer select-none text-sm font-semibold text-slate-700 hover:text-blue-600 transition-colors list-none">
+                  <span className="text-blue-600">⚙️</span>
+                  Advanced Feed Settings
+                  <span className="ml-auto text-slate-400 group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  {/* Sheet GID / Tab ID */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                      Sheet GID / Tab ID
+                    </label>
+                    <input
+                      name="sheetGid"
+                      value={formData.sheetGid}
+                      onChange={handleInputChange}
+                      className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                      placeholder="e.g. 0 or 18492049"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Specific tab of the Google Sheet to import (from the URL's gid= parameter).
+                    </p>
+                  </div>
+
+                  {/* Start Row */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                      Start Row
+                    </label>
+                    <input
+                      name="startRow"
+                      type="number"
+                      min={1}
+                      value={formData.startRow}
+                      onChange={handleInputChange}
+                      className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                      placeholder="1"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Number of header rows to skip before product data begins.
+                    </p>
+                  </div>
+
+                  {/* Column Mapping toggle */}
+                  <div className="col-span-2">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        name="useCustomMapping"
+                        checked={formData.useCustomMapping}
+                        onChange={handleCheckboxChange}
+                        className="w-4 h-4 accent-blue-600"
+                      />
+                      <span className="text-sm font-medium text-slate-700">
+                        Set columns manually
+                      </span>
+                    </label>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Define which spreadsheet columns hold the SKU, title and price. Leave off to
+                      auto-detect columns from the header row.
+                    </p>
+                  </div>
+
+                  {formData.useCustomMapping && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">
+                          SKU Column
+                        </label>
+                        <input
+                          name="skuCol"
+                          value={formData.skuCol}
+                          onChange={handleInputChange}
+                          className="w-full p-2 border border-slate-200 rounded-lg text-sm uppercase"
+                          placeholder="A"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">
+                          Title Column
+                        </label>
+                        <input
+                          name="titleCol"
+                          value={formData.titleCol}
+                          onChange={handleInputChange}
+                          className="w-full p-2 border border-slate-200 rounded-lg text-sm uppercase"
+                          placeholder="B"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">
+                          Price Column
+                        </label>
+                        <input
+                          name="priceCol"
+                          value={formData.priceCol}
+                          onChange={handleInputChange}
+                          className="w-full p-2 border border-slate-200 rounded-lg text-sm uppercase"
+                          placeholder="C"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Stop Words */}
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                      Negative Keywords (Stop Words)
+                    </label>
+                    <input
+                      name="stopWords"
+                      value={formData.stopWords}
+                      onChange={handleInputChange}
+                      className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                      placeholder="чохол, скло, уцінка, б/в"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Comma-separated keywords. Rows whose title contains any of them are skipped.
+                    </p>
+                  </div>
+                </div>
+              </details>
             </div>
 
             <button
@@ -424,6 +646,18 @@ const Suppliers: React.FC = () => {
                       sheetUrl: s.sheetUrl,
                       feedType: s.feedType ?? "GOOGLE_SHEETS",
                       autoSync: s.autoSync ?? false,
+                      sheetGid: s.sheetGid ?? "",
+                      startRow: String(s.startRow ?? 1),
+                      useCustomMapping: Boolean(
+                        s.customMapping &&
+                          (s.customMapping.skuCol ||
+                            s.customMapping.titleCol ||
+                            s.customMapping.priceCol),
+                      ),
+                      skuCol: s.customMapping?.skuCol ?? "A",
+                      titleCol: s.customMapping?.titleCol ?? "B",
+                      priceCol: s.customMapping?.priceCol ?? "C",
+                      stopWords: s.stopWords ?? "",
                     });
                     setEditingId(s.id);
                     setIsFormVisible(true);

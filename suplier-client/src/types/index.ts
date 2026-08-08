@@ -22,6 +22,13 @@ export interface SupplierProduct {
   supplierSku?: string;
 }
 
+/** Manual column mapping for a feed, expressed as spreadsheet column letters. */
+export interface FeedColumnMapping {
+  skuCol?: string;
+  titleCol?: string;
+  priceCol?: string;
+}
+
 export interface Supplier {
   id: string;
   name: string;
@@ -35,6 +42,14 @@ export interface Supplier {
   autoSync?: boolean;
   /** Timestamp of the last successful feed import. */
   lastSyncedAt?: string | null;
+  /** Specific Google Sheet tab/gid ID (e.g. '0' or '18492049'). */
+  sheetGid?: string | null;
+  /** Number of header rows to skip before parsing products (default 1). */
+  startRow?: number;
+  /** Manual column definitions, e.g. { skuCol: "A", titleCol: "B", priceCol: "C" }. */
+  customMapping?: FeedColumnMapping | null;
+  /** Comma-separated negative keywords used to ignore rows. */
+  stopWords?: string | null;
 }
 
 export interface MatchResult {
@@ -100,6 +115,10 @@ export interface ApiSupplier {
   feedType?: 'CSV' | 'GOOGLE_SHEETS';
   autoSync?: boolean;
   lastSyncedAt?: string | null;
+  sheetGid?: string | null;
+  startRow?: number;
+  customMapping?: FeedColumnMapping | null;
+  stopWords?: string | null;
 }
 
 /** Supplier product as returned by the backend REST API. */
@@ -157,6 +176,10 @@ export interface CreateSupplierPayload {
   feedUrl?: string;
   feedType?: 'CSV' | 'GOOGLE_SHEETS';
   autoSync?: boolean;
+  sheetGid?: string;
+  startRow?: number;
+  customMapping?: FeedColumnMapping;
+  stopWords?: string;
 }
 
 /** Payload for updating a supplier's feed configuration via the API. */
@@ -164,6 +187,10 @@ export interface UpdateFeedConfigPayload {
   feedUrl?: string;
   feedType?: 'CSV' | 'GOOGLE_SHEETS';
   autoSync?: boolean;
+  sheetGid?: string;
+  startRow?: number;
+  customMapping?: FeedColumnMapping;
+  stopWords?: string;
 }
 
 /** Response from the supplier feed sync endpoint. */

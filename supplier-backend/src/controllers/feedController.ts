@@ -10,6 +10,14 @@ type FeedConfigBody = {
   feedUrl?: string;
   feedType?: "CSV" | "GOOGLE_SHEETS";
   autoSync?: boolean;
+  sheetGid?: string;
+  startRow?: number;
+  customMapping?: {
+    skuCol?: string;
+    titleCol?: string;
+    priceCol?: string;
+  };
+  stopWords?: string;
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -42,6 +50,57 @@ const validateFeedConfig = (body: Record<string, unknown>): string[] => {
 
   if (body.autoSync !== undefined && typeof body.autoSync !== "boolean") {
     errors.push("Field 'autoSync' must be a boolean when provided.");
+  }
+
+  if (body.sheetGid !== undefined) {
+    if (typeof body.sheetGid !== "string") {
+      errors.push("Field 'sheetGid' must be a string when provided.");
+    }
+  }
+
+  if (body.startRow !== undefined) {
+    if (
+      typeof body.startRow !== "number" ||
+      !Number.isInteger(body.startRow) ||
+      body.startRow < 1
+    ) {
+      errors.push(
+        "Field 'startRow' must be a positive integer (>= 1) when provided.",
+      );
+    }
+  }
+
+  if (body.customMapping !== undefined) {
+    if (
+      typeof body.customMapping !== "object" ||
+      body.customMapping === null ||
+      Array.isArray(body.customMapping)
+    ) {
+      errors.push(
+        "Field 'customMapping' must be an object like { skuCol, titleCol, priceCol } when provided.",
+      );
+    } else {
+      const { skuCol, titleCol, priceCol } = body.customMapping as {
+        skuCol?: string;
+        titleCol?: string;
+        priceCol?: string;
+      };
+      for (const [key, value] of [
+        ["skuCol", skuCol],
+        ["titleCol", titleCol],
+        ["priceCol", priceCol],
+      ] as const) {
+        if (value !== undefined && (typeof value !== "string" || value.trim() === "")) {
+          errors.push(
+            `Field 'customMapping.${key}' must be a non-empty string (column letter) when provided.`,
+          );
+        }
+      }
+    }
+  }
+
+  if (body.stopWords !== undefined && typeof body.stopWords !== "string") {
+    errors.push("Field 'stopWords' must be a string when provided.");
   }
 
   return errors;
@@ -133,6 +192,14 @@ export const updateSupplierFeedConfig = async (
       feedUrl?: string | null;
       feedType?: "CSV" | "GOOGLE_SHEETS";
       autoSync?: boolean;
+      sheetGid?: string | null;
+      startRow?: number;
+      customMapping?: {
+        skuCol?: string;
+        titleCol?: string;
+        priceCol?: string;
+      };
+      stopWords?: string | null;
     } = {};
 
     if (body.feedUrl !== undefined) {
@@ -143,6 +210,18 @@ export const updateSupplierFeedConfig = async (
     }
     if (body.autoSync !== undefined) {
       data.autoSync = body.autoSync;
+    }
+    if (body.sheetGid !== undefined) {
+      data.sheetGid = body.sheetGid.trim() === "" ? null : body.sheetGid.trim();
+    }
+    if (body.startRow !== undefined) {
+      data.startRow = body.startRow;
+    }
+    if (body.customMapping !== undefined) {
+      data.customMapping = body.customMapping;
+    }
+    if (body.stopWords !== undefined) {
+      data.stopWords = body.stopWords.trim() === "" ? null : body.stopWords.trim();
     }
 
     // If a Google Sheets URL is provided, validate it can be converted to a
@@ -172,6 +251,10 @@ export const updateSupplierFeedConfig = async (
         feedType: supplier.feedType,
         autoSync: supplier.autoSync,
         lastSyncedAt: supplier.lastSyncedAt,
+        sheetGid: supplier.sheetGid,
+        startRow: supplier.startRow,
+        customMapping: supplier.customMapping,
+        stopWords: supplier.stopWords,
       },
       timestamp: new Date().toISOString(),
     });

@@ -10,6 +10,14 @@ type SupplierBody = {
   feedUrl?: string;
   feedType?: "CSV" | "GOOGLE_SHEETS";
   autoSync?: boolean;
+  sheetGid?: string;
+  startRow?: number;
+  customMapping?: {
+    skuCol?: string;
+    titleCol?: string;
+    priceCol?: string;
+  };
+  stopWords?: string;
 };
 
 /**
@@ -98,6 +106,10 @@ export const createSupplier = async (
         feedUrl: body.feedUrl?.trim() || null,
         feedType: body.feedType ?? "CSV",
         autoSync: body.autoSync ?? false,
+        sheetGid: body.sheetGid?.trim() || null,
+        startRow: body.startRow ?? 1,
+        customMapping: body.customMapping ?? undefined,
+        stopWords: body.stopWords?.trim() || null,
       },
     });
 

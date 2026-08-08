@@ -64,10 +64,20 @@ export const ingestSupplierFeed = async (
     );
   }
 
-  // 1 & 2. Fetch and parse the feed.
+  // 1 & 2. Fetch and parse the feed, honouring the supplier's advanced feed
+  // configuration (sheet tab/gid, start row, custom column mapping, stop words).
   const { products, skippedRows } = await fetchAndParseFeed(
     supplier.feedUrl,
     supplier.feedType,
+    {
+      sheetGid: supplier.sheetGid,
+      startRow: supplier.startRow,
+      customMapping: supplier.customMapping as
+        | { skuCol?: string; titleCol?: string; priceCol?: string }
+        | null
+        | undefined,
+      stopWords: supplier.stopWords,
+    },
   );
 
   const totalRows = products.length;
