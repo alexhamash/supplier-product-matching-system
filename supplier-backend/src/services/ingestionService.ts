@@ -34,13 +34,21 @@ export type IngestionResult = {
 /**
  * Run the full ingestion pipeline for a single supplier.
  *
+ * IMPORTANT: SupplierProduct records are NEVER deleted during a sync. Deleting
+ * them would destroy existing ProductMatch relations. Instead, availability is
+ * updated so matches are preserved when products reappear in a later feed.
+ *
  * Steps:
  *  1. Fetch the CSV / Google Sheets feed.
- *  2. Parse it into structured product rows (presence ⇒ in stock).
+ *  2. Parse it into structured product rows.
  *  3. Within a transaction, upsert products by `(supplierId, rawSku)`:
- *       - Existing SKU  → update price/title, set `inStock = true`.
- *       - New SKU       → create with `inStock = true`.
- *       - Missing SKU   → mark existing products `inStock = false`.
+ *       - Present WITH a valid price (`price > 0`) → update price/title and set
+ *         `inStock = true` (available).
+ *       - Present WITHOUT a valid price (`price <= 0` / null) → set
+ *         `inStock = false` and `price = null` (unavailable). (The parser
+ *         normally filters these out, but this guards against bypasses.)
+ *       - Missing from the feed entirely → keep the record to preserve
+ *         ProductMatch relations, but set `inStock = false` (unavailable).
  *  4. If new products were added, trigger automatic matching recalculation.
  *  5. Update `lastSyncedAt` on the Supplier.
  *
@@ -102,6 +110,13 @@ export const ingestSupplierFeed = async (
     for (const product of products) {
       const existing = existingBySku.get(product.sku);
 
+      // A product is "available" only when it has a valid, positive price.
+      // Unpriced rows are stored with `price: 0` (the schema's `price` column is
+      // non-nullable) and marked unavailable. The parser normally filters these
+      // out, so this is a defensive guard against bypasses.
+      const isAvailable = product.price > 0;
+      const effectivePrice = isAvailable ? product.price : 0;
+
       if (!existing) {
         // New SKU → create.
         await tx.supplierProduct.create({
@@ -109,26 +124,26 @@ export const ingestSupplierFeed = async (
             supplierId,
             rawSku: product.sku,
             rawName: product.name,
-            price: product.price,
-            inStock: true,
+            price: effectivePrice,
+            inStock: isAvailable,
           },
         });
         created++;
         continue;
       }
 
-      // Existing SKU → update price/title and ensure it's in stock.
+      // Existing SKU → update price/title and availability.
       const needsUpdate =
-        existing.inStock !== true ||
-        existing.price !== product.price;
+        existing.inStock !== isAvailable ||
+        existing.price !== effectivePrice;
 
       if (needsUpdate) {
         await tx.supplierProduct.update({
           where: { id: existing.id },
           data: {
             rawName: product.name,
-            price: product.price,
-            inStock: true,
+            price: effectivePrice,
+            inStock: isAvailable,
           },
         });
         updated++;
@@ -137,7 +152,9 @@ export const ingestSupplierFeed = async (
       }
     }
 
-    // Mark previously-existing products that are missing from the feed as out of stock.
+    // Products missing from the feed entirely are marked unavailable, but their
+    // records are KEPT so existing ProductMatch relations are preserved. Only
+    // transition products that are currently available (avoid redundant writes).
     const missingSkus = existingProducts
       .filter((p) => !skusInFeed.has(p.rawSku) && p.inStock === true)
       .map((p) => p.id);

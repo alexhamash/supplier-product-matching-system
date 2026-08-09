@@ -66,6 +66,7 @@ const toSupplierProduct = (api: ApiSupplierProduct): SupplierProduct => ({
   supplierId: Number(api.supplierId) || undefined,
   matchedMainProductId: api.matchedMainProductId ?? null,
   isMatched: api.isMatched ?? Boolean(api.matchedMainProductId),
+  isAvailable: api.isAvailable ?? true,
   linkedMainProduct: api.linkedMainProduct ?? null,
 });
 

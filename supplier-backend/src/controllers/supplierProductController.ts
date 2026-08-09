@@ -183,7 +183,9 @@ export const getSupplierProducts = async (
     });
 
     // Map each product to the frontend shape, exposing an `isMatched` flag and
-    // the linked `linkedMainProduct` info (or null when not linked).
+    // the linked `linkedMainProduct` info (or null when not linked). The
+    // availability flag is exposed as `isAvailable` (aliased from the persisted
+    // `inStock` column) so the UI can render an "Out of Stock" badge.
     const data = products.map((p) => {
       const approved = p.matches[0];
       return {
@@ -193,6 +195,7 @@ export const getSupplierProducts = async (
         rawName: p.rawName,
         price: p.price,
         inStock: p.inStock,
+        isAvailable: p.inStock,
         matchedMainProductId: p.matchedMainProductId,
         isMatched: Boolean(approved?.mainProduct),
         linkedMainProduct: approved?.mainProduct ?? null,

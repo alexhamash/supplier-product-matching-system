@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middlewares/errorHandler";
 import { ingestSupplierFeed } from "../services/ingestionService";
-import { toGoogleSheetsCsvUrl } from "../services/feedParser";
+import { toGoogleSheetsCsvUrl, FeedMappingError } from "../services/feedParser";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -153,6 +153,17 @@ export const syncSupplierFeed = async (
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
+    // Feed column-mapping / validation failures are user errors, not server
+    // errors. Surface them as a 400 Bad Request with the parser's message
+    // instead of letting them bubble up as an unhandled 500.
+    if (err instanceof FeedMappingError) {
+      res.status(400).json({
+        success: false,
+        message: err.message,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     next(err);
   }
 };

@@ -19,6 +19,7 @@ interface LocalProduct {
   status?: string;
   supplierName?: string;
   isMatched?: boolean;
+  isAvailable?: boolean;
   matchedMainProductId?: string | null;
   linkedMainProduct?: {
     id: string;
@@ -199,9 +200,16 @@ const SupplierProducts: React.FC = () => {
                   <Package className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-slate-900 line-clamp-2 leading-snug">
-                    {product.name}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-slate-900 line-clamp-2 leading-snug">
+                      {product.name}
+                    </p>
+                    {product.isAvailable === false && (
+                      <span className="inline-flex items-center shrink-0 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-semibold border border-red-100 uppercase tracking-wide">
+                        Out of Stock
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500 mt-1 font-mono uppercase">
                     SKU: {product.supplierSku}
                   </p>

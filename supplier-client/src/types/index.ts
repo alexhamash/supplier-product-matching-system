@@ -24,6 +24,8 @@ export interface SupplierProduct {
   matchedMainProductId?: string | null;
   /** Whether this supplier product is currently linked to a main product. */
   isMatched?: boolean;
+  /** Whether this supplier product is currently available (in stock). */
+  isAvailable?: boolean;
   /** The linked main product details (name / sku), when matched. */
   linkedMainProduct?: {
     id: string;
@@ -143,6 +145,8 @@ export interface ApiSupplierProduct {
   price: number;
   createdAt: string;
   updatedAt: string;
+  /** Whether this supplier product is currently available (in stock). */
+  isAvailable?: boolean;
   /** The id of the MainProduct this supplier product is currently linked to. */
   matchedMainProductId?: string | null;
   /** Whether this supplier product is currently linked to a main product. */
