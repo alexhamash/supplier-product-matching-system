@@ -12,7 +12,7 @@ interface FormData {
 }
 
 const MainProducts: React.FC = () => {
-  const { products, supplierProducts, updateProduct, addProduct } = useProducts();
+  const { products, updateProduct, addProduct } = useProducts();
 
   const [searchTerm, setSearchTerm] = useState<string>("");
 
@@ -45,6 +45,24 @@ const MainProducts: React.FC = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  /**
+   * Reset the form back to its pristine "Add New Product" state.
+   * Clears the editing target and all input fields.
+   */
+  const resetForm = (): void => {
+    setEditingProductId(null);
+    setFormData({ name: "", SKU: "", brand: "", category: "" });
+  };
+
+  /**
+   * Open the form in "Add New Product" mode, discarding any stale
+   * state left over from a previous edit.
+   */
+  const handleOpenAddForm = (): void => {
+    resetForm();
+    setIsFormVisible(true);
+  };
+
   const handleSubmit = async (): Promise<void> => {
     if (!formData.name.trim() || !formData.SKU.trim()) {
       alert("Заповність поля");
@@ -74,8 +92,7 @@ const MainProducts: React.FC = () => {
       }
 
       setIsFormVisible(false);
-      setEditingProductId(null);
-      setFormData({ name: "", SKU: "", brand: "", category: "" });
+      resetForm();
     } catch (err) {
       console.error("Failed to save product:", err);
       alert("Failed to save product. Please check the console for details.");
@@ -106,11 +123,19 @@ const MainProducts: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => setIsFormVisible(!isFormVisible)}
+          onClick={() => {
+            if (isFormVisible) {
+              // Closing/cancelling the form: reset to a fresh state.
+              resetForm();
+              setIsFormVisible(false);
+            } else {
+              handleOpenAddForm();
+            }
+          }}
           className="bg-[#3B82F6] hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
         >
           <Plus className="w-4 h-4" />
-          {isFormVisible ? "Cancel" : "Create Main Product"}
+          {isFormVisible ? "Cancel" : "Add Product"}
         </button>
       </div>
 
@@ -153,7 +178,7 @@ const MainProducts: React.FC = () => {
               onClick={handleSubmit}
               className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg font-medium transition-colors"
             >
-              Save Product
+              {editingProductId ? "Save Product" : "Add Product"}
             </button>
           </div>
         </div>
@@ -213,15 +238,12 @@ const MainProducts: React.FC = () => {
               <div className="col-span-3">
                 <span
                   className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                    supplierProducts.filter((m) => m.mainProductId === product.id).length > 0
+                    (product.linkedCount || 0) > 0
                       ? "text-blue-600 bg-blue-50 border-blue-200"
                       : "text-slate-500 bg-slate-100 border-slate-200"
                   }`}
                 >
-                  {
-                    supplierProducts.filter((m) => m.mainProductId === product.id).length
-                  }{" "}
-                  Linked
+                  {product.linkedCount || 0} Linked
                 </span>
               </div>
               <div className="col-span-1 text-right flex items-center justify-end gap-2">

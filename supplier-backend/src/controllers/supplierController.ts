@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middlewares/errorHandler";
+import { ingestSupplierFeed } from "../services/ingestionService";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -113,9 +114,26 @@ export const createSupplier = async (
       },
     });
 
+    // Trigger the initial feed sync synchronously so the onboarding flow can
+    // show the user exactly how many products were imported before closing.
+    let importedCount = 0;
+    if (supplier.feedUrl) {
+      try {
+        const ingestion = await ingestSupplierFeed(supplier.id);
+        importedCount = ingestion.created;
+      } catch (err) {
+        // The supplier was created successfully; surface the sync failure in the
+        // response so the client can still proceed (importedCount = 0).
+        console.error(
+          `[createSupplier] Initial feed sync failed for supplier '${supplier.name}':`,
+          err,
+        );
+      }
+    }
+
     res.status(201).json({
       success: true,
-      data: supplier,
+      data: { supplier, importedCount },
       message: "Supplier created successfully.",
       timestamp: new Date().toISOString(),
     });

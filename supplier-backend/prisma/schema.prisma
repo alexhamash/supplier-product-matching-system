@@ -95,6 +95,9 @@ model SupplierProduct {
   price      Float
   /// Whether the product is currently available in the supplier's feed.
   inStock    Boolean  @default(true)
+  /// The id of the MainProduct this supplier product is currently linked to
+  /// (via an APPROVED ProductMatch). Null when the product is not linked.
+  matchedMainProductId String?
 
   supplier  Supplier       @relation(fields: [supplierId], references: [id])
   matches   ProductMatch[]

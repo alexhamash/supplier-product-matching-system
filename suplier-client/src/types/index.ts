@@ -20,6 +20,17 @@ export interface SupplierProduct {
   mainProductId?: string | null;
   supplierId?: number;
   supplierSku?: string;
+  /** The id of the MainProduct this supplier product is currently linked to. */
+  matchedMainProductId?: string | null;
+  /** Whether this supplier product is currently linked to a main product. */
+  isMatched?: boolean;
+  /** The linked main product details (name / sku), when matched. */
+  linkedMainProduct?: {
+    id: string;
+    sku: string;
+    name: string;
+    price: number;
+  } | null;
 }
 
 /** Manual column mapping for a feed, expressed as spreadsheet column letters. */
@@ -101,6 +112,8 @@ export interface ApiMainProduct {
   price: number;
   createdAt: string;
   updatedAt: string;
+  /** Number of supplier products currently linked (APPROVED matches). */
+  linkedCount?: number;
 }
 
 /** Supplier as returned by the backend REST API. */
@@ -130,6 +143,17 @@ export interface ApiSupplierProduct {
   price: number;
   createdAt: string;
   updatedAt: string;
+  /** The id of the MainProduct this supplier product is currently linked to. */
+  matchedMainProductId?: string | null;
+  /** Whether this supplier product is currently linked to a main product. */
+  isMatched?: boolean;
+  /** The linked main product details, when matched. */
+  linkedMainProduct?: {
+    id: string;
+    sku: string;
+    name: string;
+    price: number;
+  } | null;
 }
 
 /** Match status enum values used by the backend. */
@@ -180,6 +204,29 @@ export interface CreateSupplierPayload {
   startRow?: number;
   customMapping?: FeedColumnMapping;
   stopWords?: string;
+}
+
+/**
+ * Raw response from POST /api/suppliers.
+ *
+ * The backend creates the supplier AND triggers the initial feed sync
+ * synchronously, so the payload includes the created supplier (as the backend
+ * DTO) plus the number of products imported during onboarding.
+ */
+export interface CreateSupplierResponse {
+  supplier: ApiSupplier;
+  /** Number of products imported during the initial feed sync (0 if none / failed). */
+  importedCount: number;
+}
+
+/**
+ * Mapped result of creating a supplier, as returned by the service layer.
+ * The `supplier` is converted to the frontend `Supplier` shape.
+ */
+export interface CreateSupplierResult {
+  supplier: Supplier;
+  /** Number of products imported during the initial feed sync (0 if none / failed). */
+  importedCount: number;
 }
 
 /** Payload for updating a supplier's feed configuration via the API. */

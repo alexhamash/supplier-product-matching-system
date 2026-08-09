@@ -18,6 +18,8 @@ import type {
   ApiSupplier,
   ApiSupplierProduct,
   CreateSupplierPayload,
+  CreateSupplierResponse,
+  CreateSupplierResult,
   ImportSupplierProductsPayload,
   ImportSupplierProductsResponse,
   UpdateFeedConfigPayload,
@@ -59,9 +61,12 @@ const toSupplierProduct = (api: ApiSupplierProduct): SupplierProduct => ({
   id: api.id,
   name: api.rawName,
   price: api.price,
-  status: 'unmatched',
+  status: api.isMatched ? 'matched' : 'unmatched',
   supplierSku: api.rawSku,
   supplierId: Number(api.supplierId) || undefined,
+  matchedMainProductId: api.matchedMainProductId ?? null,
+  isMatched: api.isMatched ?? Boolean(api.matchedMainProductId),
+  linkedMainProduct: api.linkedMainProduct ?? null,
 });
 
 const toSupplierProducts = (list: ApiSupplierProduct[]): SupplierProduct[] =>
@@ -82,14 +87,22 @@ export const getSuppliers = async (): Promise<Supplier[]> => {
  * POST /api/suppliers
  * Create a new supplier on the backend.
  *
+ * The backend creates the supplier AND triggers the initial feed sync
+ * synchronously, so the response includes the created supplier plus the number
+ * of products imported during onboarding.
+ *
  * @param payload - Supplier data (name, contactInfo?).
- * @returns The created supplier mapped to the frontend shape.
+ * @returns The created supplier (mapped to the frontend shape) and the count
+ *          of products imported during the initial sync.
  */
 export const createSupplier = async (
   payload: CreateSupplierPayload,
-): Promise<Supplier> => {
-  const data = await apiClient.post<ApiSupplier>('suppliers', payload);
-  return toSupplier(data);
+): Promise<CreateSupplierResult> => {
+  const data = await apiClient.post<CreateSupplierResponse>('suppliers', payload);
+  return {
+    supplier: toSupplier(data.supplier),
+    importedCount: data.importedCount,
+  };
 };
 
 /**

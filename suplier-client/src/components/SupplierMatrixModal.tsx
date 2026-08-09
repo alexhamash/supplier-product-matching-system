@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { SupplierMatrix, MatrixOffer, MatrixSortKey } from "../types";
 import { getMainProductMatrix } from "../services/mainProductService";
+import { useProducts } from "../context/ProductContext";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -67,9 +68,18 @@ const SupplierMatrixModal: React.FC<SupplierMatrixModalProps> = ({
   mainProductName,
   onClose,
 }) => {
+  const { refresh } = useProducts();
   const [matrix, setMatrix] = useState<SupplierMatrix | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Close the modal and refetch the main products so the "Linked Supplier
+  // Products" badge in the Main Products table reflects the latest state
+  // without requiring a manual page refresh.
+  const handleClose = (): void => {
+    void refresh();
+    onClose();
+  };
 
   // ─── Controls ──────────────────────────────────────────────────────────────
   const [sortKey, setSortKey] = useState<MatrixSortKey>("lowestPrice");
@@ -143,7 +153,7 @@ const SupplierMatrixModal: React.FC<SupplierMatrixModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"
-      onClick={onClose}
+      onClick={handleClose}
       role="dialog"
       aria-modal="true"
       aria-label="Supplier Matrix"
@@ -171,7 +181,7 @@ const SupplierMatrixModal: React.FC<SupplierMatrixModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg p-2 transition-colors"
             aria-label="Close"
           >

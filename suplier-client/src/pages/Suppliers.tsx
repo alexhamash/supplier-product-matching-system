@@ -40,6 +40,19 @@ const Suppliers: React.FC = () => {
 
   const [demoLoading, setDemoLoading] = useState<boolean>(false);
 
+  /** True while the "Add Supplier" request (create + initial sync) is in flight. */
+  const [creating, setCreating] = useState<boolean>(false);
+
+  /**
+   * Holds the result of a successful supplier creation so the form can render
+   * the success screen (imported product count) before the modal closes.
+   * Null when no creation has completed yet.
+   */
+  const [createdResult, setCreatedResult] = useState<{
+    supplierName: string;
+    importedCount: number;
+  } | null>(null);
+
   /** Set of supplier ids currently running a manual sync (for per-row spinner). */
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
 
@@ -113,7 +126,7 @@ const Suppliers: React.FC = () => {
           name: uniqueName,
           contactInfo: "https://demo-catalog.example.com/sheet",
         });
-        targetSupplierId = createdSupplier.id;
+        targetSupplierId = createdSupplier.supplier.id;
       } catch (createErr) {
         // 3. Fallback: if creation failed (e.g. 409 Conflict), reuse the first
         //    existing supplier instead of throwing an unhandled error.
@@ -155,6 +168,37 @@ const Suppliers: React.FC = () => {
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const { name, checked } = e.target;
     setFormData((prev) => ({ ...prev, [name]: checked }));
+  };
+
+  /**
+   * Reset the form back to its pristine "Add New Supplier" state.
+   * Clears the editing target, all input fields, and any prior success result.
+   */
+  const resetForm = (): void => {
+    setEditingId(null);
+    setCreatedResult(null);
+    setFormData({
+      name: "",
+      sheetUrl: "",
+      feedType: "GOOGLE_SHEETS",
+      autoSync: false,
+      sheetGid: "",
+      startRow: "1",
+      useCustomMapping: false,
+      skuCol: "A",
+      titleCol: "B",
+      priceCol: "C",
+      stopWords: "",
+    });
+  };
+
+  /**
+   * Open the form in "Add New Supplier" mode, discarding any stale
+   * state left over from a previous edit.
+   */
+  const handleOpenAddForm = (): void => {
+    resetForm();
+    setIsFormVisible(true);
   };
 
   // const handleSubmit = () => {
@@ -212,47 +256,57 @@ const Suppliers: React.FC = () => {
             : null,
           stopWords: formData.stopWords.trim() || null,
         });
-      } else {
-        const startRowNum = parseInt(formData.startRow, 10);
-        await createSupplier({
-          name: formData.name,
-          contactInfo: formData.sheetUrl,
-          feedUrl: formData.sheetUrl,
-          feedType: formData.feedType,
-          autoSync: formData.autoSync,
-          sheetGid: formData.sheetGid.trim() || undefined,
-          startRow: Number.isNaN(startRowNum) || startRowNum < 1 ? 1 : startRowNum,
-          customMapping: formData.useCustomMapping
-            ? {
-                skuCol: formData.skuCol.trim() || undefined,
-                titleCol: formData.titleCol.trim() || undefined,
-                priceCol: formData.priceCol.trim() || undefined,
-              }
-            : undefined,
-          stopWords: formData.stopWords.trim() || undefined,
-        });
-        await refresh();
-      }
 
-      setIsFormVisible(false);
-      setEditingId(null);
-      setFormData({
-        name: "",
-        sheetUrl: "",
-        feedType: "GOOGLE_SHEETS",
-        autoSync: false,
-        sheetGid: "",
-        startRow: "1",
-        useCustomMapping: false,
-        skuCol: "A",
-        titleCol: "B",
-        priceCol: "C",
-        stopWords: "",
-      });
+        setIsFormVisible(false);
+        resetForm();
+      } else {
+        // Creating a new supplier: keep the modal open while the backend
+        // creates the supplier AND runs the initial feed sync synchronously.
+        setCreating(true);
+        setCreatedResult(null);
+        try {
+          const startRowNum = parseInt(formData.startRow, 10);
+          const result = await createSupplier({
+            name: formData.name,
+            contactInfo: formData.sheetUrl,
+            feedUrl: formData.sheetUrl,
+            feedType: formData.feedType,
+            autoSync: formData.autoSync,
+            sheetGid: formData.sheetGid.trim() || undefined,
+            startRow: Number.isNaN(startRowNum) || startRowNum < 1 ? 1 : startRowNum,
+            customMapping: formData.useCustomMapping
+              ? {
+                  skuCol: formData.skuCol.trim() || undefined,
+                  titleCol: formData.titleCol.trim() || undefined,
+                  priceCol: formData.priceCol.trim() || undefined,
+                }
+              : undefined,
+            stopWords: formData.stopWords.trim() || undefined,
+          });
+
+          // Switch the form view to the success screen with the imported count.
+          setCreatedResult({
+            supplierName: result.supplier.name,
+            importedCount: result.importedCount,
+          });
+        } finally {
+          setCreating(false);
+        }
+      }
     } catch (err) {
       console.error("Failed to save supplier:", err);
       alert("Failed to save supplier. Please check the console for details.");
     }
+  };
+
+  /**
+   * Close the success screen, reset the form, and refetch the supplier list.
+   * Called from the "Done" button after a successful supplier creation.
+   */
+  const handleDone = async (): Promise<void> => {
+    setIsFormVisible(false);
+    resetForm();
+    await refresh();
   };
 
   // const handleDelete = (id) => {
@@ -321,17 +375,47 @@ const Suppliers: React.FC = () => {
             {demoLoading ? "Generating..." : "Generate Demo Supplier with Products"}
           </button>
           <button
-            onClick={() => setIsFormVisible(!isFormVisible)}
+            onClick={() => {
+              if (isFormVisible) {
+                // Closing/cancelling the form: reset to a fresh state.
+                resetForm();
+                setIsFormVisible(false);
+              } else {
+                handleOpenAddForm();
+              }
+            }}
             className="bg-[#3B82F6] text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-600 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            {isFormVisible ? "Cancel" : "Create New Supplier"}
+            {isFormVisible ? "Cancel" : "Add Supplier"}
           </button>
         </div>
       </div>
 
+      {/* Success screen shown after a supplier is created and its feed synced */}
+      {isFormVisible && createdResult && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-8 mb-6 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
+            <CheckCircle2 className="w-9 h-9 text-emerald-600" />
+          </div>
+          <h3 className="text-xl font-bold text-emerald-900 mb-2">
+            Success! Imported {createdResult.importedCount} products from{" "}
+            {createdResult.supplierName}
+          </h3>
+          <p className="text-sm text-emerald-700 mb-6">
+            Your supplier has been created and its catalog has been synced.
+          </p>
+          <button
+            onClick={handleDone}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      )}
+
       {/* Форма додавання постачальника */}
-      {isFormVisible && (
+      {isFormVisible && !createdResult && (
         <div className="bg-slate-50 border border-blue-200 rounded-xl p-6 mb-6">
           <h3 className="text-lg font-bold mb-4 text-slate-900">
             {editingId ? "Edit Supplier" : "Add New Supplier"}
@@ -514,9 +598,11 @@ const Suppliers: React.FC = () => {
 
             <button
               onClick={handleSubmit} // Кнопка додати
-              className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg font-medium transition-colors"
+              disabled={creating}
+              className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              Add Supplier
+              {creating && <RefreshCw className="w-4 h-4 animate-spin" />}
+              {creating ? "Creating & Syncing..." : "Add Supplier"}
             </button>
           </div>
         </div>

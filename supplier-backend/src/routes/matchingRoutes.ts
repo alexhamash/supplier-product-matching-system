@@ -4,6 +4,7 @@ import {
   getMatches,
   updateMatchStatus,
   linkMatch,
+  unlinkMatch,
 } from "../controllers/matchingController";
 
 const router = Router();
@@ -13,6 +14,9 @@ router.post("/run", runMatching);
 
 // POST   /api/matching/link          → Directly link a supplier product to a main product
 router.post("/link", linkMatch);
+
+// POST   /api/matching/unlink        → Remove an existing link between a supplier product and a main product
+router.post("/unlink", unlinkMatch);
 
 // GET    /api/matching               → Fetch matches (optional ?status= & ?supplierId=)
 router.get("/", getMatches);

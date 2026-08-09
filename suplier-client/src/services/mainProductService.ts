@@ -30,7 +30,10 @@ const toMainProduct = (api: ApiMainProduct): MainProduct => ({
   SKU: api.sku,
   brand: '',
   category: api.description ?? undefined,
-  linkedCount: 0,
+  // The backend now returns the authoritative count of linked supplier
+  // products (APPROVED matches) via `linkedCount`. Fall back to 0 when the
+  // field is absent (e.g. older backend responses).
+  linkedCount: api.linkedCount ?? 0,
 });
 
 /**

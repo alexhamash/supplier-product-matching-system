@@ -252,12 +252,30 @@ export const updateMatchStatus = async (
           where: { id },
           data: { status: "APPROVED" },
         });
+
+        // Persist the link on the SupplierProduct so it survives reloads.
+        await tx.supplierProduct.update({
+          where: { id: existing.supplierProductId },
+          data: { matchedMainProductId: existing.mainProductId },
+        });
       });
     } else {
-      // Simple rejection
-      await prisma.productMatch.update({
-        where: { id },
-        data: { status: "REJECTED" },
+      // Simple rejection. If this rejected match was the active link for the
+      // supplier product, clear the persisted link so the UI stops showing it
+      // as linked.
+      await prisma.$transaction(async (tx) => {
+        await tx.productMatch.update({
+          where: { id },
+          data: { status: "REJECTED" },
+        });
+
+        await tx.supplierProduct.updateMany({
+          where: {
+            id: existing.supplierProductId,
+            matchedMainProductId: existing.mainProductId,
+          },
+          data: { matchedMainProductId: null },
+        });
       });
     }
 
@@ -373,7 +391,9 @@ export const linkMatch = async (
     }
 
     // Upsert the match as APPROVED, and reject any other PENDING matches for
-    // the same supplier product to avoid duplicate approvals.
+    // the same supplier product to avoid duplicate approvals. Also persist the
+    // link directly on the SupplierProduct so the UI can restore the linked
+    // state after a page reload / query refetch.
     const match = await prisma.$transaction(async (tx) => {
       // Reject other PENDING matches for the same supplier product
       await tx.productMatch.updateMany({
@@ -383,6 +403,12 @@ export const linkMatch = async (
           status: "PENDING",
         },
         data: { status: "REJECTED" },
+      });
+
+      // Persist the link on the SupplierProduct itself so it survives reloads.
+      await tx.supplierProduct.update({
+        where: { id: supplierProductId },
+        data: { matchedMainProductId: mainProductId },
       });
 
       return tx.productMatch.upsert({
@@ -434,6 +460,95 @@ export const linkMatch = async (
       success: true,
       data: match,
       message: "Supplier product linked to main product.",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /api/matching/unlink
+ * Remove an existing link between a supplier product and a main product.
+ *
+ * This is used by the "Unlink from Product" action in the UI. It rejects the
+ * APPROVED ProductMatch for the pair and clears the persisted
+ * `matchedMainProductId` on the SupplierProduct so the UI stops showing it as
+ * linked after a reload / refetch.
+ */
+export const unlinkMatch = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const body = req.body as LinkMatchBody;
+
+    // Validate supplierProductId
+    if (
+      !body.supplierProductId ||
+      typeof body.supplierProductId !== "string" ||
+      body.supplierProductId.trim() === ""
+    ) {
+      throw new AppError(
+        "Field 'supplierProductId' is required and must be a non-empty string.",
+        400,
+      );
+    }
+
+    // Validate mainProductId
+    if (
+      !body.mainProductId ||
+      typeof body.mainProductId !== "string" ||
+      body.mainProductId.trim() === ""
+    ) {
+      throw new AppError(
+        "Field 'mainProductId' is required and must be a non-empty string.",
+        400,
+      );
+    }
+
+    const supplierProductId = body.supplierProductId.trim();
+    const mainProductId = body.mainProductId.trim();
+
+    // Verify the supplier product exists
+    const supplierProduct = await prisma.supplierProduct.findUnique({
+      where: { id: supplierProductId },
+    });
+    if (!supplierProduct) {
+      throw new AppError(
+        `SupplierProduct with id '${supplierProductId}' not found.`,
+        404,
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Safely delete the APPROVED match record for this exact pair (if any).
+      // deleteMany is a no-op when no matching row exists, so it never throws
+      // a 500 even if the link was already removed.
+      await tx.productMatch.deleteMany({
+        where: {
+          supplierProductId,
+          mainProductId,
+          status: "APPROVED",
+        },
+      });
+
+      // Clear the persisted link flag on the SupplierProduct (only if it still
+      // points to this main product). This is the supplierProduct "flag" that
+      // drives the UI's linked/unlinked state.
+      await tx.supplierProduct.updateMany({
+        where: {
+          id: supplierProductId,
+          matchedMainProductId: mainProductId,
+        },
+        data: { matchedMainProductId: null },
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Supplier product unlinked from main product.",
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

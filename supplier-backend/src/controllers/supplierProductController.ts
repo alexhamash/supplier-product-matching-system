@@ -159,13 +159,52 @@ export const getSupplierProducts = async (
 
     const products = await prisma.supplierProduct.findMany({
       where: { supplierId },
+      // Include the linked MainProduct (via the APPROVED ProductMatch) so the
+      // client can render the "Matched" state and the linked main product's
+      // name / SKU without an extra round-trip. PENDING suggestions and
+      // REJECTED matches are excluded — only real links count as "matched".
+      include: {
+        matches: {
+          where: { status: "APPROVED" },
+          include: {
+            mainProduct: {
+              select: {
+                id: true,
+                sku: true,
+                name: true,
+                price: true,
+              },
+            },
+          },
+          take: 1,
+        },
+      },
       orderBy: { createdAt: "desc" },
+    });
+
+    // Map each product to the frontend shape, exposing an `isMatched` flag and
+    // the linked `linkedMainProduct` info (or null when not linked).
+    const data = products.map((p) => {
+      const approved = p.matches[0];
+      return {
+        id: p.id,
+        supplierId: p.supplierId,
+        rawSku: p.rawSku,
+        rawName: p.rawName,
+        price: p.price,
+        inStock: p.inStock,
+        matchedMainProductId: p.matchedMainProductId,
+        isMatched: Boolean(approved?.mainProduct),
+        linkedMainProduct: approved?.mainProduct ?? null,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      };
     });
 
     res.status(200).json({
       success: true,
-      data: products,
-      total: products.length,
+      data,
+      total: data.length,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

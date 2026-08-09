@@ -171,6 +171,18 @@ export const linkMatch = async (
   return toProductMatch(data);
 };
 
+/**
+ * POST /api/matching/unlink
+ * Remove an existing link between a supplier product and a main product.
+ *
+ * @param payload - Object with supplierProductId and mainProductId.
+ */
+export const unlinkMatch = async (
+  payload: LinkMatchPayload,
+): Promise<void> => {
+  await apiClient.post<{ success: boolean }>('matching/unlink', payload);
+};
+
 // ─── Local Scoring (kept for UI suggestions) ────────────────────────────────
 
 /**

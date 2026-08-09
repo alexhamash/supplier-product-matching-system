@@ -15,6 +15,8 @@ import toast from "react-hot-toast";
 import {
   runMatching,
   linkMatch,
+  unlinkMatch,
+  getProductMatches,
   getSupplierSuggestions,
 } from "../services/matchingService";
 import { getAllSupplierProducts } from "../services/supplierService";
@@ -26,6 +28,7 @@ const ProductMatching: React.FC = () => {
     products,
     supplier,
     setProducts,
+    refresh,
     loading,
   } = useProducts();
 
@@ -38,8 +41,11 @@ const ProductMatching: React.FC = () => {
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [runningAuto, setRunningAuto] = useState<boolean>(false);
 
-  // Map of supplierProductId -> mainProductId representing confirmed links.
-  const [linkedMap, setLinkedMap] = useState<Record<string, string>>({});
+  // Map of supplierProductId -> mainProductId representing confirmed links,
+  // derived from APPROVED ProductMatch records returned by the backend. This
+  // complements `matchedMainProductId` on the supplier product so that legacy
+  // APPROVED matches (created before the field existed) are still recognised.
+  const [approvedMatches, setApprovedMatches] = useState<Record<string, string>>({});
 
   // Load supplier products from the backend for all suppliers.
   const loadSupplierProducts = useCallback(async (): Promise<void> => {
@@ -59,6 +65,29 @@ const ProductMatching: React.FC = () => {
     }
   }, [supplier]);
 
+  // Load APPROVED matches from the backend so the linked state is restored
+  // after a page reload / query refetch, even for legacy matches that do not
+  // carry `matchedMainProductId` on the supplier product.
+  const loadApprovedMatches = useCallback(async (): Promise<void> => {
+    try {
+      const matches = await getProductMatches({ status: "APPROVED" });
+      const map: Record<string, string> = {};
+      for (const m of matches) {
+        map[m.supplierProduct.id] = m.mainProduct.id;
+      }
+      setApprovedMatches(map);
+    } catch (err) {
+      console.error("Failed to load approved matches:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (supplier.length > 0) {
+      void loadSupplierProducts();
+      void loadApprovedMatches();
+    }
+  }, [supplier, loadSupplierProducts, loadApprovedMatches]);
+
   useEffect(() => {
     if (supplier.length > 0) {
       void loadSupplierProducts();
@@ -69,9 +98,15 @@ const ProductMatching: React.FC = () => {
 
   const selectedProduct = products[activeItem] || null;
 
-  // A supplier product is "matched" if it has a confirmed link in linkedMap.
+  // A supplier product is "matched" if it has a confirmed link persisted on the
+  // backend. This is derived from BOTH the `matchedMainProductId` field on the
+  // supplier product AND the APPROVED ProductMatch records, so the linked state
+  // survives page reloads / query refetches (including legacy matches).
+  const linkedMainProductId = (p: SupplierProduct): string | undefined =>
+    p.matchedMainProductId ?? approvedMatches[String(p.id)] ?? undefined;
+
   const isMatched = (p: SupplierProduct): boolean =>
-    Boolean(linkedMap[p.id as string]);
+    Boolean(linkedMainProductId(p));
 
   const unmatchedProducts = supplierProducts.filter((p) => !isMatched(p));
 
@@ -80,13 +115,15 @@ const ProductMatching: React.FC = () => {
       ? getSupplierSuggestions(selectedProduct, unmatchedProducts)
       : []
     : supplierProducts.filter(
-        (p) => isMatched(p) && linkedMap[p.id as string] === selectedProduct?.id,
+        (p) =>
+          isMatched(p) && linkedMainProductId(p) === selectedProduct?.id,
       );
 
   const uniqueSuppliersCount = new Set(
     supplierProducts
       .filter(
-        (p) => isMatched(p) && linkedMap[p.id as string] === selectedProduct?.id,
+        (p) =>
+          isMatched(p) && linkedMainProductId(p) === selectedProduct?.id,
       )
       .map((p) => p.supplierId),
   ).size;
@@ -125,8 +162,16 @@ const ProductMatching: React.FC = () => {
         mainProductId: String(selectedProduct.id),
       });
 
-      // Record the link locally so the UI reflects it immediately.
-      setLinkedMap((prev) => ({
+      // Optimistically reflect the link in the local list so the UI updates
+      // immediately, then refetch from the backend to keep state in sync.
+      setSupplierProducts((prev) =>
+        prev.map((p) =>
+          String(p.id) === String(supplierProduct.id)
+            ? { ...p, matchedMainProductId: String(selectedProduct.id) }
+            : p,
+        ),
+      );
+      setApprovedMatches((prev) => ({
         ...prev,
         [String(supplierProduct.id)]: String(selectedProduct.id),
       }));
@@ -138,6 +183,16 @@ const ProductMatching: React.FC = () => {
             : p,
         ),
       );
+
+      // Invalidate / refetch the supplier products list so the linked state is
+      // re-synced from the backend (survives reloads).
+      await loadSupplierProducts();
+      await loadApprovedMatches();
+
+      // Refetch the main products so the authoritative `linkedCount` (computed
+      // by the backend from APPROVED matches) is reflected in the Main Products
+      // table badge in real-time, without a manual page refresh.
+      await refresh();
 
       toast.success(`Зв'язано: ${supplierProduct.name}`, {
         duration: 4000,
@@ -166,13 +221,32 @@ const ProductMatching: React.FC = () => {
    * Unlink a supplier product from the selected main product.
    */
   const handleUnlink = async (supplierProduct: SupplierProduct): Promise<void> => {
-    setLinkedMap((prev) => {
-      const next = { ...prev };
-      delete next[String(supplierProduct.id)];
-      return next;
-    });
+    if (!selectedProduct) {
+      toast.error("Оберіть основний товар для розірвання зв'язку");
+      return;
+    }
 
-    if (selectedProduct) {
+    setLinkingId(String(supplierProduct.id));
+    try {
+      await unlinkMatch({
+        supplierProductId: String(supplierProduct.id),
+        mainProductId: String(selectedProduct.id),
+      });
+
+      // Optimistically clear the link locally, then refetch from the backend.
+      setSupplierProducts((prev) =>
+        prev.map((p) =>
+          String(p.id) === String(supplierProduct.id)
+            ? { ...p, matchedMainProductId: null }
+            : p,
+        ),
+      );
+      setApprovedMatches((prev) => {
+        const next = { ...prev };
+        delete next[String(supplierProduct.id)];
+        return next;
+      });
+
       setProducts(
         products.map((p) =>
           p.id === selectedProduct.id
@@ -180,9 +254,22 @@ const ProductMatching: React.FC = () => {
             : p,
         ),
       );
-    }
 
-    toast.error(`Зв'язок розірвано: ${supplierProduct.name}`);
+      // Invalidate / refetch so the unlinked state is re-synced from the backend.
+      await loadSupplierProducts();
+      await loadApprovedMatches();
+
+      // Refetch the main products so the authoritative `linkedCount` is updated
+      // in the Main Products table badge in real-time.
+      await refresh();
+
+      toast.success("Product unlinked successfully");
+    } catch (err) {
+      console.error("Failed to unlink supplier product:", err);
+      toast.error("Не вдалося розірвати зв'язок");
+    } finally {
+      setLinkingId(null);
+    }
   };
 
   /**
@@ -530,10 +617,11 @@ const ProductMatching: React.FC = () => {
                                 {showLinked ? (
                                   <button
                                     onClick={() => handleUnlink(item)}
-                                    className="flex-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-all hover:border-rose-300"
+                                    disabled={isLinking}
+                                    className="flex-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm flex items-center justify-center gap-2 transition-all hover:border-rose-300 disabled:opacity-60"
                                   >
                                     <XCircle className="w-4 h-4" />
-                                    Unlink from Product
+                                    {isLinking ? "Unlinking..." : "Unlink from Product"}
                                   </button>
                                 ) : (
                                   <button

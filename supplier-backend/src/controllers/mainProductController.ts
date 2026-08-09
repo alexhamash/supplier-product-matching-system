@@ -48,14 +48,40 @@ export const getAllMainProducts = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
+    // Fetch all main products, dynamically counting the number of linked
+    // supplier products. A supplier product is considered "linked" when it has
+    // an APPROVED ProductMatch against this main product. PENDING suggestions
+    // and REJECTED matches are excluded so the badge reflects real links only.
     const products = await prisma.mainProduct.findMany({
       orderBy: { createdAt: "desc" },
+      include: {
+        _count: {
+          select: {
+            productMatches: {
+              where: { status: "APPROVED" },
+            },
+          },
+        },
+      },
     });
+
+    // Map each product to the frontend shape, exposing the linked count under
+    // the `linkedCount` field expected by the client.
+    const data = products.map((p) => ({
+      id: p.id,
+      sku: p.sku,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      linkedCount: p._count.productMatches,
+    }));
 
     res.status(200).json({
       success: true,
-      data: products,
-      total: products.length,
+      data,
+      total: data.length,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
