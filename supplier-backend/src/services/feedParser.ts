@@ -44,6 +44,23 @@ export type FeedParseOptions = {
   stopWords?: string | null;
 };
 
+// ─── Errors ─────────────────────────────────────────────────────────────────
+
+/**
+ * Error thrown when a feed's columns cannot be reliably mapped to the required
+ * logical fields (SKU, name, price). This is a *validation* failure rather than
+ * an unexpected runtime error, so callers can surface it as a user-friendly
+ * 400 Bad Request instead of a 500 Internal Server Error.
+ */
+export class FeedMappingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FeedMappingError";
+    // Maintain proper prototype chain for `instanceof` checks.
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 // ─── Header Mapping ─────────────────────────────────────────────────────────
 
 /**
@@ -86,6 +103,94 @@ const resolveColumn = (
     if (idx !== -1) return headers[idx];
   }
   return null;
+};
+
+/**
+ * How many rows from the top of the data block to scan when searching for the
+ * real header row. Covers feeds that begin with vendor banners, contact info,
+ * or a title row before the actual column headers.
+ */
+const HEADER_SCAN_ROWS = 10;
+
+/**
+ * Determine whether a given row looks like a header row.
+ *
+ * A row is treated as a header when it contains at least one cell that matches
+ * a known SKU, name, or price header alias. This lets us skip banner / contact /
+ * title rows and locate the actual column header row even when it is not the
+ * very first row of the feed.
+ */
+const isHeaderRow = (row: string[]): boolean => {
+  const normalized = row.map(normalizeHeader);
+  const allAliases = [...SKU_HEADERS, ...NAME_HEADERS, ...PRICE_HEADERS];
+  return normalized.some((cell) => allAliases.includes(cell));
+};
+
+/**
+ * Resolve the column indices for SKU / name / price from a header row.
+ *
+ * Returns `null` for any field whose column could not be found.
+ */
+const resolveIndicesFromHeaders = (
+  headers: string[],
+): { skuIndex: number; nameIndex: number; priceIndex: number } => {
+  const skuColumn = resolveColumn(headers, SKU_HEADERS);
+  const nameColumn = resolveColumn(headers, NAME_HEADERS);
+  const priceColumn = resolveColumn(headers, PRICE_HEADERS);
+
+  return {
+    skuIndex: skuColumn ? headers.indexOf(skuColumn) : -1,
+    nameIndex: nameColumn ? headers.indexOf(nameColumn) : -1,
+    priceIndex: priceColumn ? headers.indexOf(priceColumn) : -1,
+  };
+};
+
+/**
+ * Locate the actual header row within the first `HEADER_SCAN_ROWS` rows of the
+ * data block. Returns the index of the header row, or `null` if none is found.
+ */
+const findHeaderRowIndex = (rows: string[][]): number | null => {
+  const scanLimit = Math.min(rows.length, HEADER_SCAN_ROWS);
+  for (let i = 0; i < scanLimit; i++) {
+    if (isHeaderRow(rows[i])) return i;
+  }
+  return null;
+};
+
+// ─── Fallback SKU Generation ────────────────────────────────────────────────
+
+/**
+ * Slugify a product title into a URL/identifier-safe string.
+ *
+ * Handles Cyrillic (Ukrainian/Russian) characters by transliterating them to
+ * Latin, then lowercases and collapses runs of non-alphanumeric characters into
+ * a single hyphen. Returns an empty string when the input contains no usable
+ * characters.
+ *
+ * Examples:
+ *   "Чохол для iPhone 15"  → "chohol-dlya-iphone-15"
+ *   "USB-C Cable 2m"       → "usb-c-cable-2m"
+ */
+const slugify = (value: string): string => {
+  const translitMap: Record<string, string> = {
+    а: "a", б: "b", в: "v", г: "h", ґ: "g", д: "d", е: "e", є: "ie",
+    ж: "zh", з: "z", и: "y", і: "i", ї: "i", й: "i", к: "k", л: "l",
+    м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u",
+    ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "shch", ь: "", ю: "iu",
+    я: "ia",
+  };
+
+  const transliterated = value
+    .toLowerCase()
+    .split("")
+    .map((char) => translitMap[char] ?? char)
+    .join("");
+
+  const slug = transliterated
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug;
 };
 
 // ─── Price Normalisation ────────────────────────────────────────────────────
@@ -212,6 +317,55 @@ export const resolveFeedUrl = (
   return trimmed;
 };
 
+// ─── Multi-Tab / Multi-Sheet Support ────────────────────────────────────────
+
+/**
+ * Extract the spreadsheet ID from a Google Sheets URL.
+ * Returns `null` if the URL is not a valid Google Sheets URL.
+ */
+const extractSpreadsheetId = (url: string): string | null => {
+  const match = url.trim().match(
+    /docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/,
+  );
+  return match ? match[1] : null;
+};
+
+/**
+ * Fetch the HTML view page of a Google Sheet and scrape the `gid` identifiers
+ * of every tab/sheet it contains.
+ *
+ * Google Sheets exposes the list of tabs in the `htmlview` page as links of the
+ * form `#gid=123456789`. We collect every unique `gid` so the caller can export
+ * and parse each tab individually.
+ *
+ * Returns an array of `gid` strings (possibly empty if none could be scraped).
+ */
+const fetchSheetGids = async (spreadsheetId: string): Promise<string[]> => {
+  const htmlUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
+  const response = await axios.get<string>(htmlUrl, {
+    responseType: "text",
+    timeout: 30_000,
+    maxRedirects: 5,
+    headers: {
+      Accept: "text/html,application/xhtml+xml,*/*",
+      "User-Agent": "Supplier-Product-Matching-System/1.0",
+    },
+  });
+
+  if (typeof response.data !== "string") {
+    return [];
+  }
+
+  const gids = new Set<string>();
+  const gidRegex = /[#&]gid=(\d+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = gidRegex.exec(response.data)) !== null) {
+    gids.add(match[1]);
+  }
+
+  return Array.from(gids);
+};
+
 // ─── CSV Fetching & Parsing ─────────────────────────────────────────────────
 
 /**
@@ -310,6 +464,9 @@ export const parseCsvProducts = (
   let skuIndex: number | null = null;
   let nameIndex: number | null = null;
   let priceIndex: number | null = null;
+  // Index (within `dataRows`) of the row that was used as the header row.
+  // `null` when a custom mapping or positional fallback was used instead.
+  let headerRowIndex: number | null = null;
 
   if (customMapping) {
     // Manual mapping: convert column letters to indices.
@@ -317,58 +474,128 @@ export const parseCsvProducts = (
     nameIndex = customMapping.titleCol ? columnLetterToIndex(customMapping.titleCol) : null;
     priceIndex = customMapping.priceCol ? columnLetterToIndex(customMapping.priceCol) : null;
   } else {
-    // Header-based mapping: the first data row is the header row.
-    const headers = dataRows[0];
-    const skuColumn = resolveColumn(headers, SKU_HEADERS);
-    const nameColumn = resolveColumn(headers, NAME_HEADERS);
-    const priceColumn = resolveColumn(headers, PRICE_HEADERS);
+    // Dynamic header detection: scan the first few rows for the real header row
+    // instead of assuming it is always the very first row. This handles feeds
+    // that begin with vendor banners, contact info, or a title row, as well as
+    // Google/Excel exports whose first row is generic (e.g. ["A", "B", "", "D"]).
+    const headerRowIdx = findHeaderRowIndex(dataRows);
 
-    skuIndex = skuColumn ? headers.indexOf(skuColumn) : -1;
-    nameIndex = nameColumn ? headers.indexOf(nameColumn) : -1;
-    priceIndex = priceColumn ? headers.indexOf(priceColumn) : -1;
+    if (headerRowIdx !== null) {
+      const headers = dataRows[headerRowIdx];
+      const resolved = resolveIndicesFromHeaders(headers);
+      skuIndex = resolved.skuIndex;
+      nameIndex = resolved.nameIndex;
+      priceIndex = resolved.priceIndex;
+      headerRowIndex = headerRowIdx;
 
-    // Debug logging to help diagnose header-mapping issues.
-    console.log(
-      `[feedParser] Raw CSV headers: ${JSON.stringify(headers)}`,
-    );
-    console.log(
-      `[feedParser] Resolved columns → SKU: ${skuColumn ?? "MISSING"}, ` +
-        `Name: ${nameColumn ?? "none"}, Price: ${priceColumn ?? "MISSING"}`,
-    );
+      console.log(
+        `[feedParser] Detected header row at index ${headerRowIdx}: ${JSON.stringify(headers)}`,
+      );
+      console.log(
+        `[feedParser] Resolved columns → SKU: ${skuIndex >= 0 ? skuIndex : "MISSING"}, ` +
+          `Name: ${nameIndex >= 0 ? nameIndex : "none"}, ` +
+          `Price: ${priceIndex >= 0 ? priceIndex : "MISSING"}`,
+      );
+    }
+
+    // Fallback: if no explicit header row was found (or it was incomplete),
+    // attempt positional mapping (Column 0 = SKU, Column 1 = Name, Column 2 = Price).
+    // This is a best-effort heuristic for feeds with generic/blank headers.
+    if (skuIndex === null || skuIndex < 0 || priceIndex === null || priceIndex < 0) {
+      const positionalSku = 0;
+      const positionalName = 1;
+      const positionalPrice = 2;
+
+      // Only apply the positional fallback when the row actually has enough
+      // columns to be meaningful (avoid mapping a single-column banner row).
+      const firstRow = dataRows[0];
+      if (firstRow.length >= 3) {
+        console.log(
+          `[feedParser] No usable header row found; falling back to positional ` +
+            `mapping (SKU=col ${positionalSku}, Name=col ${positionalName}, Price=col ${positionalPrice}).`,
+        );
+        skuIndex = positionalSku;
+        nameIndex = positionalName;
+        priceIndex = positionalPrice;
+      }
+    }
   }
 
-  // If we cannot find a SKU or price column, we cannot build products.
-  if (skuIndex === null || skuIndex < 0 || priceIndex === null || priceIndex < 0) {
+  // A price column is strictly required — without it we cannot build products.
+  // A missing SKU column is NOT fatal: a fallback SKU is generated per row from
+  // the product title (see the row loop below). Throw a FeedMappingError (a
+  // validation error) so callers can surface it as a 400 rather than a 500.
+  if (priceIndex === null || priceIndex < 0) {
     const available = customMapping
       ? `customMapping: ${JSON.stringify(customMapping)}`
-      : `Available headers: ${JSON.stringify(dataRows[0])}`;
-    throw new Error(
-      `Could not find required columns in feed. ` +
-        `SKU column: ${skuIndex === null || skuIndex < 0 ? "missing" : "ok"}, ` +
+      : `Available rows: ${JSON.stringify(dataRows.slice(0, HEADER_SCAN_ROWS))}`;
+    throw new FeedMappingError(
+      `Could not map required columns in feed. ` +
         `Price column: ${priceIndex === null || priceIndex < 0 ? "missing" : "ok"}. ` +
         available,
     );
   }
 
-  // When using header-based mapping, skip the header row itself.
-  const productRows = customMapping ? dataRows : dataRows.slice(1);
+  // When no SKU column is available, fall back to generating a SKU per row.
+  const hasSkuColumn = skuIndex !== null && skuIndex >= 0;
+  if (!hasSkuColumn) {
+    console.log(
+      `[feedParser] No SKU column found; will generate fallback SKUs from product titles.`,
+    );
+  }
+
+  // Determine which rows are product data:
+  //  - Custom mapping → all data rows.
+  //  - Header-based mapping → skip the detected header row (and any banner rows
+  //    that preceded it).
+  //  - Positional fallback → all data rows (no header row to skip).
+  const productRows =
+    customMapping || headerRowIndex === null
+      ? dataRows
+      : dataRows.slice(headerRowIndex + 1);
 
   const products: ParsedFeedProduct[] = [];
   let skippedRows = 0;
 
   for (const record of productRows) {
-    const sku = (record[skuIndex] ?? "").trim();
-    const price = parsePrice(record[priceIndex]);
-    const name = nameIndex !== null && nameIndex >= 0
-      ? (record[nameIndex] ?? "").trim()
-      : "";
-
-    if (sku === "" || price === null) {
+    // ─── Skip empty / spacer rows ───────────────────────────────────────────
+    // Ignore rows where every cell is empty or whitespace-only.
+    const isSpacerRow = record.every(
+      (cell) => (cell ?? "").trim() === "",
+    );
+    if (isSpacerRow) {
       skippedRows++;
       continue;
     }
 
-    const title = name || sku;
+    const price = parsePrice(record[priceIndex]);
+    const name = nameIndex !== null && nameIndex >= 0
+      ? (record[nameIndex] ?? "").trim()
+      : "";
+    const title = name;
+
+    // ─── Skip category banners / subheaders ─────────────────────────────────
+    // A row that has a title but no valid price (missing, null, 0, or
+    // non-numeric, e.g. "iPad Air M4") is treated as a category divider and is
+    // NOT added as a product. This is enforced by requiring `price > 0` below.
+    //
+    // ─── Require valid price & meaningful title ─────────────────────────────
+    // Only save rows where `price > 0` and `title.length > 2`.
+    if (title.length <= 2 || price === null || price <= 0) {
+      skippedRows++;
+      continue;
+    }
+
+    // ─── Determine the SKU ──────────────────────────────────────────────────
+    // Use the mapped column when present and non-empty; otherwise generate a
+    // deterministic fallback SKU derived from the product title.
+    let sku = skuIndex !== null && skuIndex >= 0
+      ? (record[skuIndex] ?? "").trim()
+      : "";
+    if (sku === "") {
+      const slug = slugify(title);
+      sku = slug ? `SUPPLIER_SKU_${slug}` : `SUPPLIER_SKU_${products.length + 1}`;
+    }
 
     // Stop-word filtering: skip rows whose title contains any negative keyword.
     if (stopWords.length > 0) {
@@ -404,12 +631,66 @@ export const parseCsvProducts = (
  * High-level helper: fetch a feed (Google Sheets or CSV) and parse it into
  * structured product rows, honouring advanced feed options (gid, startRow,
  * customMapping, stopWords).
+ *
+ * For Google Sheets feeds without an explicit `sheetGid`, the HTML view page is
+ * scraped to discover every tab, and each tab is exported as CSV and parsed.
+ * The products from all tabs are combined into a single result.
  */
 export const fetchAndParseFeed = async (
   feedUrl: string,
   feedType: FeedType,
   options?: FeedParseOptions,
 ): Promise<ParseFeedResult> => {
+  // ─── Multi-tab Google Sheets handling ─────────────────────────────────────
+  if (feedType === "GOOGLE_SHEETS") {
+    const spreadsheetId = extractSpreadsheetId(feedUrl);
+
+    // If a specific tab is requested, parse only that tab (existing behaviour).
+    if (spreadsheetId && !options?.sheetGid) {
+      const gids = await fetchSheetGids(spreadsheetId);
+
+      if (gids.length > 0) {
+        console.log(
+          `[feedParser] Found ${gids.length} tab(s) in Google Sheet: ${JSON.stringify(gids)}`,
+        );
+
+        const combined: ParsedFeedProduct[] = [];
+        let totalSkipped = 0;
+
+        for (const gid of gids) {
+          const csvUrl = toGoogleSheetsCsvUrl(feedUrl, gid);
+          if (!csvUrl) continue;
+
+          try {
+            const csvText = await fetchCsvText(csvUrl);
+            const result = parseCsvProducts(csvText, options);
+            combined.push(...result.products);
+            totalSkipped += result.skippedRows;
+            console.log(
+              `[feedParser] Tab gid=${gid}: parsed ${result.products.length} product(s), ` +
+                `skipped ${result.skippedRows} row(s).`,
+            );
+          } catch (err) {
+            // A single unparseable tab should not abort the whole feed. Log and
+            // continue with the remaining tabs.
+            console.warn(
+              `[feedParser] Skipping tab gid=${gid} due to parse error: ` +
+                `${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }
+
+        return { products: combined, skippedRows: totalSkipped };
+      }
+
+      // No tabs scraped — fall through to the default single-export behaviour.
+      console.log(
+        `[feedParser] Could not scrape tabs; falling back to default sheet export.`,
+      );
+    }
+  }
+
+  // ─── Default single-feed behaviour ────────────────────────────────────────
   const resolvedUrl = resolveFeedUrl(feedUrl, feedType, options?.sheetGid);
   const csvText = await fetchCsvText(resolvedUrl);
   return parseCsvProducts(csvText, options);
