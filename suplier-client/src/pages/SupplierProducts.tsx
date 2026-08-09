@@ -5,10 +5,11 @@ import {
   ChevronDown,
   ArrowRight,
   AlertCircle,
+  CheckCircle2,
   Package,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { getSuppliers } from "../services/supplierService";
+import { getSuppliers, getSupplierProducts } from "../services/supplierService";
 import type { SupplierProduct } from "../types";
 
 interface LocalProduct {
@@ -17,6 +18,14 @@ interface LocalProduct {
   supplierSku?: string;
   status?: string;
   supplierName?: string;
+  isMatched?: boolean;
+  matchedMainProductId?: string | null;
+  linkedMainProduct?: {
+    id: string;
+    sku: string;
+    name: string;
+    price: number;
+  } | null;
   [key: string]: unknown;
 }
 
@@ -26,28 +35,49 @@ const SupplierProducts: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>("All Statuses");
 
   useEffect(() => {
-    const allSuppliers = getSuppliers();
-    let allProducts: LocalProduct[] = [];
+    let cancelled = false;
 
-    allSuppliers.forEach((supplier) => {
-      const key = `supplier_products_${supplier.id}`;
-      const savedData = localStorage.getItem(key);
+    const loadProducts = async (): Promise<void> => {
+      try {
+        const allSuppliers = await getSuppliers();
+        const allProducts: LocalProduct[] = [];
 
-      if (savedData) {
-        const parsedData = JSON.parse(savedData);
-        if (Array.isArray(parsedData)) {
-          const productsWithBrand: LocalProduct[] = parsedData.map(
-            (item: Record<string, unknown>) => ({
+        for (const supplier of allSuppliers) {
+          const supplierProducts = await getSupplierProducts(supplier.id);
+          const productsWithBrand: LocalProduct[] = supplierProducts.map(
+            (item) => ({
               ...item,
               supplierName: supplier.name,
             } as LocalProduct),
           );
-          allProducts = [...allProducts, ...productsWithBrand];
+          allProducts.push(...productsWithBrand);
         }
+
+        if (!cancelled) {
+          setProducts(allProducts);
+        }
+      } catch (err) {
+        console.error("Failed to load supplier products:", err);
       }
-    });
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setProducts(allProducts);
+    };
+
+    void loadProducts();
+
+    // Invalidate the supplier-products data whenever the page becomes visible
+    // again (e.g. after returning from the Product Matching page where a
+    // link/unlink mutation may have occurred). This keeps the Match Status and
+    // Linked Main Product columns in sync without a manual page refresh.
+    const handleVisibility = (): void => {
+      if (document.visibilityState === "visible") {
+        void loadProducts();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   const filteredProducts = products.filter((p) => {
@@ -68,6 +98,16 @@ const SupplierProducts: React.FC = () => {
   });
 
   const navigate = useNavigate();
+
+  // A supplier product is "matched" when it is linked to a main product. This
+  // is derived from the backend's `isMatched` flag (or the persisted
+  // `matchedMainProductId` / `linkedMainProduct` info).
+  const isMatched = (p: LocalProduct): boolean =>
+    Boolean(
+      p.isMatched ||
+        p.matchedMainProductId ||
+        p.linkedMainProduct,
+    );
 
   return (
     <div className="w-full">
@@ -177,22 +217,56 @@ const SupplierProducts: React.FC = () => {
 
               {/* 3. Status */}
               <div className="col-span-2 flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4 text-amber-500" />
-                <span className="text-sm font-medium text-amber-700">
-                  Unmatched
-                </span>
+                {isMatched(product) ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <span className="text-sm font-medium text-emerald-700">
+                      Matched
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-4 h-4 text-amber-500" />
+                    <span className="text-sm font-medium text-amber-700">
+                      Unmatched
+                    </span>
+                  </>
+                )}
               </div>
 
               {/* 4. Action / Link */}
               <div className="col-span-4">
-                <button
-                  onClick={() =>
-                    navigate(`/matching?supplierProductId=${product.id}`)
-                  }
-                  className="w-full text-center py-2 px-3 border border-slate-300 border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-colors font-medium"
-                >
-                  Find Match
-                </button>
+                {isMatched(product) ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 truncate">
+                        {product.linkedMainProduct?.name ?? "Linked Product"}
+                      </p>
+                      <p className="text-xs text-slate-500 font-mono truncate">
+                        SKU: {product.linkedMainProduct?.sku ?? "—"}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        navigate(
+                          `/matching?supplierProductId=${product.id}&mainProductId=${product.matchedMainProductId ?? ""}`,
+                        )
+                      }
+                      className="shrink-0 text-center py-2 px-3 border border-emerald-300 rounded-lg text-sm text-emerald-700 hover:bg-emerald-50 transition-colors font-medium"
+                    >
+                      View Link
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() =>
+                      navigate(`/matching?supplierProductId=${product.id}`)
+                    }
+                    className="w-full text-center py-2 px-3 border border-slate-300 border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-colors font-medium"
+                  >
+                    Find Match
+                  </button>
+                )}
               </div>
             </div>
           ))}

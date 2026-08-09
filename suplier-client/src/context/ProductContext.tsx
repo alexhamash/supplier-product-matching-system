@@ -1,7 +1,15 @@
-import { createContext, useState, type ReactNode, useContext, useEffect } from "react"
+import { createContext, useState, useCallback, type ReactNode, useContext, useEffect } from "react"
 import type { MainProduct, Supplier, SupplierProduct, ProductContextState } from "../types"
-import { getMainProducts } from "../services/mainProductService"
-import { getSupplierProducts, getSuppliers } from "../services/supplierService"
+import {
+  getMainProducts,
+  createMainProduct,
+  updateMainProduct,
+} from "../services/mainProductService"
+import {
+  getSupplierProducts,
+  getSuppliers,
+  createSupplier,
+} from "../services/supplierService"
 
 const ProductContext = createContext<ProductContextState | undefined>(undefined)
 
@@ -11,47 +19,94 @@ export const ProductProvider = ({ children }: { children: ReactNode }): React.Re
     const [products, setProducts] = useState<MainProduct[]>([])
     const [supplierProducts, setSupplierProducts] = useState<SupplierProduct[]>([])
     const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
-    useEffect(() => {
-        const loadData = async (): Promise<void> => {
-            setLoading(true)
-            try {
-                const mainData: MainProduct[] = getMainProducts() as MainProduct[]
-                const supplierData: SupplierProduct[] = getSupplierProducts(1) as SupplierProduct[]
-                const suppliers: Supplier[] = getSuppliers() as Supplier[]
+    /**
+     * Load all main products and suppliers from the backend.
+     * Exposed via `refresh` so components can re-fetch after mutations.
+     */
+    const refresh = useCallback(async (): Promise<void> => {
+        setLoading(true)
+        setError(null)
+        try {
+            const [mainData, suppliers] = await Promise.all([
+                getMainProducts(),
+                getSuppliers(),
+            ])
 
-                setProducts(mainData)
-                setSupplierProducts(supplierData)
-                setSupplier(suppliers)
-            } catch (error: unknown) {
-                console.error("Помилка завантаження", error)
-            } finally {
-                setLoading(false)
-            }
+            setProducts(mainData)
+            setSupplier(suppliers)
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Помилка завантаження"
+            console.error("Помилка завантаження", err)
+            setError(message)
+        } finally {
+            setLoading(false)
         }
-        loadData()
     }, [])
 
-    const addProduct = (newProduct: MainProduct): void => {
-        const updated: MainProduct[] = [...products, newProduct]
-        setProducts(updated)
-        localStorage.setItem("main_products", JSON.stringify(updated))
+    useEffect(() => {
+        void refresh()
+    }, [refresh])
+
+    /**
+     * Create a main product via the backend, then refetch the list.
+     */
+    const addProduct = async (newProduct: MainProduct): Promise<void> => {
+        setError(null)
+        try {
+            await createMainProduct({
+                sku: newProduct.SKU,
+                name: newProduct.name,
+                description: newProduct.category,
+                price: 0,
+            })
+            await refresh()
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Помилка створення товару"
+            console.error("Помилка створення товару", err)
+            setError(message)
+            throw err
+        }
     }
 
-    const updateProduct = (updatedItem: MainProduct): void => {
-        const updated: MainProduct[] = products.map((p: MainProduct) =>
-            p.id === updatedItem.id ? updatedItem : p
-        )
-        setProducts(updated)
-        localStorage.setItem("main_products", JSON.stringify(updated))
+    /**
+     * Update a main product via the backend, then refetch the list.
+     */
+    const updateProduct = async (updatedItem: MainProduct): Promise<void> => {
+        setError(null)
+        try {
+            await updateMainProduct(String(updatedItem.id), {
+                sku: updatedItem.SKU,
+                name: updatedItem.name,
+                description: updatedItem.category ?? null,
+            })
+            await refresh()
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Помилка оновлення товару"
+            console.error("Помилка оновлення товару", err)
+            setError(message)
+            throw err
+        }
     }
 
-    const updateSupplier = (updatedItem: Supplier): void => {
-        const updatedSuppliers: Supplier[] = supplier.map((p: Supplier) =>
-            p.id === updatedItem.id ? updatedItem : p
-        )
-        setSupplier(updatedSuppliers)
-        localStorage.setItem("suppliers", JSON.stringify(updatedSuppliers))
+    /**
+     * Update a supplier via the backend, then refetch the list.
+     */
+    const updateSupplier = async (updatedItem: Supplier): Promise<void> => {
+        setError(null)
+        try {
+            await createSupplier({
+                name: updatedItem.name,
+                contactInfo: updatedItem.sheetUrl,
+            })
+            await refresh()
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Помилка оновлення постачальника"
+            console.error("Помилка оновлення постачальника", err)
+            setError(message)
+            throw err
+        }
     }
 
     return (
@@ -67,6 +122,9 @@ export const ProductProvider = ({ children }: { children: ReactNode }): React.Re
                 setSupplierProducts,
                 loading,
                 setLoading,
+                error,
+                setError,
+                refresh,
                 addProduct,
                 updateProduct,
                 updateSupplier,

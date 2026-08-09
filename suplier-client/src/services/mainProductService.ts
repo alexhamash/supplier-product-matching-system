@@ -1,39 +1,108 @@
 // src/services/mainProductService.ts
+//
+// Refactored to consume the backend REST API at /api/main-products.
+// All CRUD operations now call the live endpoints instead of LocalStorage.
 
-import type { MainProduct } from '../types';
+import { apiClient } from './api';
+import type {
+  MainProduct,
+  ApiMainProduct,
+  CreateMainProductPayload,
+  UpdateMainProductPayload,
+  SupplierMatrix,
+} from '../types';
 
-const STORAGE_KEY = 'main_products';
-
-const defaultProducts: MainProduct[] = [
-  { id: 1, name: 'Apple iPhone 15 128GB Black', SKU: 'IPH15-128-BK', brand: 'Apple', category: 'Smartphones', linkedCount: 0 },
-  { id: 2, name: 'Samsung Galaxy S24 Ultra 12/256GB', SKU: 'SM-S928B', brand: 'Samsung', category: 'Smartphones', linkedCount: 0 },
-  { id: 3, name: 'Sony PlayStation 5 Slim Edition', SKU: 'PS5-SLIM-WH', brand: 'Sony', category: 'Consoles', linkedCount: 0 },
-  { id: 4, name: 'MacBook Air M3 13.6" 8/256GB Silver', SKU: 'MAC-M3-13-SL', brand: 'Apple', category: 'Laptops', linkedCount: 0 },
-  { id: 5, name: 'Logitech G Pro X Superlight White', SKU: 'LOGI-GPX-WH', brand: 'Logitech', category: 'Accessories', linkedCount: 0 },
-  { id: 6, name: 'Asus ROG Zephyrus G14 2024', SKU: 'ASUS-G14-2024', brand: 'Asus', category: 'Laptops', linkedCount: 0 },
-  { id: 7, name: 'AirPods Pro (2nd Gen) MagSafe USB-C', SKU: 'MQD83', brand: 'Apple', category: 'Audio', linkedCount: 0 },
-];
+// ─── Mapping helpers ────────────────────────────────────────────────────────
 
 /**
- * Retrieve all main products from LocalStorage, falling back to defaults.
+ * Map an API main-product DTO to the frontend MainProduct shape.
+ *
+ * The backend stores `sku`, `name`, `description`, `price` while the frontend
+ * also expects `brand`, `category`, `linkedCount`. We derive sensible defaults
+ * for fields the API does not yet provide.
  */
-export const getMainProducts = (): MainProduct[] => {
-  const savedData = localStorage.getItem(STORAGE_KEY);
-  return savedData ? (JSON.parse(savedData) as MainProduct[]) : defaultProducts;
+const toMainProduct = (api: ApiMainProduct): MainProduct => ({
+  // Preserve the backend's real string UUID. Converting it to a number would
+  // yield NaN (UUIDs are non-numeric) and fall back to a client-generated
+  // timestamp that does NOT exist in the database, causing 404s on linking.
+  id: api.id,
+  name: api.name,
+  SKU: api.sku,
+  brand: '',
+  category: api.description ?? undefined,
+  // The backend now returns the authoritative count of linked supplier
+  // products (APPROVED matches) via `linkedCount`. Fall back to 0 when the
+  // field is absent (e.g. older backend responses).
+  linkedCount: api.linkedCount ?? 0,
+});
+
+/**
+ * Map an array of API DTOs to frontend MainProduct[]. Sorted by createdAt desc.
+ */
+const toMainProducts = (list: ApiMainProduct[]): MainProduct[] =>
+  list.map(toMainProduct);
+
+// ─── CRUD Operations ────────────────────────────────────────────────────────
+
+/**
+ * GET /api/main-products
+ * Retrieve all main products from the backend.
+ */
+export const getMainProducts = async (): Promise<MainProduct[]> => {
+  const data = await apiClient.get<ApiMainProduct[]>('main-products');
+  return toMainProducts(data);
 };
 
 /**
- * Persist a new main product to LocalStorage and return the updated list.
+ * POST /api/main-products
+ * Create a new main product on the backend.
  *
- * @param newProduct - Product data without an id (id is auto-generated).
- * @returns The full updated list of main products.
+ * @param payload - Product data (sku, name, description?, price).
+ * @returns The created product mapped to the frontend shape.
  */
-export const saveMainProducts = (newProduct: Omit<MainProduct, 'id'>): MainProduct[] => {
-  const products = getMainProducts();
-  const updatedProducts: MainProduct[] = [
-    ...products,
-    { ...newProduct, id: Date.now() },
-  ];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProducts));
-  return updatedProducts;
+export const createMainProduct = async (
+  payload: CreateMainProductPayload,
+): Promise<MainProduct> => {
+  const data = await apiClient.post<ApiMainProduct>('main-products', payload);
+  return toMainProduct(data);
+};
+
+/**
+ * PUT /api/main-products/:id
+ * Update an existing main product.
+ *
+ * @param id - The backend UUID of the product.
+ * @param payload - Fields to update.
+ * @returns The updated product mapped to the frontend shape.
+ */
+export const updateMainProduct = async (
+  id: string,
+  payload: UpdateMainProductPayload,
+): Promise<MainProduct> => {
+  const data = await apiClient.put<ApiMainProduct>(
+    `main-products/${id}`,
+    payload,
+  );
+  return toMainProduct(data);
+};
+
+/**
+ * DELETE /api/main-products/:id
+ * Delete a main product by its backend UUID.
+ */
+export const deleteMainProduct = async (id: string): Promise<void> => {
+  await apiClient.del(`main-products/${id}`);
+};
+
+/**
+ * GET /api/main-products/:id/matrix
+ * Retrieve the consolidated Supplier Matrix for a single main product.
+ *
+ * @param id - The backend UUID of the main product.
+ * @returns The matrix payload (main product info, summary stats, and offers).
+ */
+export const getMainProductMatrix = async (
+  id: string,
+): Promise<SupplierMatrix> => {
+  return apiClient.get<SupplierMatrix>(`main-products/${id}/matrix`);
 };

@@ -1,0 +1,128 @@
+// ─── Generator ──────────────────────────────────────────────────────────────
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Datasource ─────────────────────────────────────────────────────────────
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+enum MatchStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// The type of price feed a supplier provides.
+enum FeedType {
+  CSV
+  GOOGLE_SHEETS
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────
+
+/// Represents an authenticated user of the system.
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+
+  createdAt DateTime @default(now())
+
+  @@map("users")
+}
+
+/// Represents a supplier entity that provides product data.
+model Supplier {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  contactInfo String?
+
+  // ─── Feed / Ingestion Settings ────────────────────────────────────────────
+  /// URL to the Google Sheet or CSV price feed.
+  feedUrl String?
+  /// Feed type — either a raw CSV file or a Google Sheet.
+  feedType FeedType @default(CSV)
+  /// Toggle for automated periodic (cron) ingestion.
+  autoSync Boolean @default(false)
+  /// Timestamp of the last successful import.
+  lastSyncedAt DateTime?
+
+  // ─── Advanced Feed Configuration ──────────────────────────────────────────
+  /// Specific Google Sheet tab/gid ID (e.g. '0' or '18492049').
+  sheetGid String?
+  /// Number of header rows to skip before parsing products (default 1).
+  startRow Int @default(1)
+  /// Manual column definitions, e.g. { skuCol: "A", titleCol: "B", priceCol: "C" }.
+  customMapping Json?
+  /// Comma-separated negative keywords used to ignore rows (e.g. "чохол, скло").
+  stopWords String?
+
+  supplierProducts SupplierProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("suppliers")
+}
+
+/// Represents the canonical (master) product record in the system.
+model MainProduct {
+  id    String  @id @default(uuid())
+  sku   String  @unique
+  name  String
+  description String?
+  price Float
+
+  productMatches ProductMatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("main_products")
+}
+
+/// Represents a product as provided by a specific supplier.
+model SupplierProduct {
+  id         String   @id @default(uuid())
+  supplierId String
+  rawSku     String
+  rawName    String
+  price      Float
+  /// Whether the product is currently available in the supplier's feed.
+  inStock    Boolean  @default(true)
+  /// The id of the MainProduct this supplier product is currently linked to
+  /// (via an APPROVED ProductMatch). Null when the product is not linked.
+  matchedMainProductId String?
+
+  supplier  Supplier       @relation(fields: [supplierId], references: [id])
+  matches   ProductMatch[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([supplierId, rawSku])
+  @@map("supplier_products")
+}
+
+/// Represents a match (suggestion) linking a supplier product to a main product.
+model ProductMatch {
+  id              String      @id @default(uuid())
+  mainProductId   String
+  supplierProductId String
+  status          MatchStatus @default(PENDING)
+  confidenceScore Float?
+
+  mainProduct     MainProduct     @relation(fields: [mainProductId], references: [id])
+  supplierProduct SupplierProduct @relation(fields: [supplierProductId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([mainProductId, supplierProductId])
+  @@map("product_matches")
+}
