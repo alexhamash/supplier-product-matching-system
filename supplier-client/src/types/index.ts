@@ -366,6 +366,7 @@ export interface ProductContextState {
   refresh: () => Promise<void>;
   addProduct: (product: MainProduct) => Promise<void>;
   updateProduct: (product: MainProduct) => Promise<void>;
+  deleteProduct: (id: string) => Promise<void>;
   updateSupplier: (supplier: Supplier) => Promise<void>;
 }
 

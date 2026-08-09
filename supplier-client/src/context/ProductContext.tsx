@@ -4,6 +4,7 @@ import {
   getMainProducts,
   createMainProduct,
   updateMainProduct,
+  deleteMainProduct,
 } from "../services/mainProductService"
 import {
   getSupplierProducts,
@@ -91,6 +92,23 @@ export const ProductProvider = ({ children }: { children: ReactNode }): React.Re
     }
 
     /**
+     * Delete a main product via the backend, then refetch the list.
+     * The backend also unlinks any associated supplier-product matches.
+     */
+    const deleteProduct = async (id: string): Promise<void> => {
+        setError(null)
+        try {
+            await deleteMainProduct(id)
+            await refresh()
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Помилка видалення товару"
+            console.error("Помилка видалення товару", err)
+            setError(message)
+            throw err
+        }
+    }
+
+    /**
      * Update a supplier via the backend, then refetch the list.
      */
     const updateSupplier = async (updatedItem: Supplier): Promise<void> => {
@@ -127,6 +145,7 @@ export const ProductProvider = ({ children }: { children: ReactNode }): React.Re
                 refresh,
                 addProduct,
                 updateProduct,
+                deleteProduct,
                 updateSupplier,
             }}
         >

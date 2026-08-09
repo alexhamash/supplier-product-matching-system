@@ -1,5 +1,5 @@
 import React, { useState, type ChangeEvent } from "react";
-import { Search, Plus, Package, Table2 } from "lucide-react";
+import { Search, Plus, Package, Table2, Trash2, X } from "lucide-react";
 import { useProducts } from "../context/ProductContext";
 import type { MainProduct } from "../types";
 import SupplierMatrixModal from "../components/SupplierMatrixModal";
@@ -12,9 +12,13 @@ interface FormData {
 }
 
 const MainProducts: React.FC = () => {
-  const { products, updateProduct, addProduct } = useProducts();
+  const { products, updateProduct, addProduct, deleteProduct } = useProducts();
 
   const [searchTerm, setSearchTerm] = useState<string>("");
+
+  // The main product awaiting deletion confirmation (null = modal closed).
+  const [productToDelete, setProductToDelete] = useState<MainProduct | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const [formData, setFormData] = useState<FormData>({
     name: "",
@@ -108,6 +112,27 @@ const MainProducts: React.FC = () => {
       category: product.category ?? "",
     });
     setIsFormVisible(true);
+  };
+
+  /**
+   * Confirm and delete the selected main product.
+   * The backend unlinks any associated supplier-product matches before
+   * removing the record, so linked supplier products become available again.
+   */
+  const handleConfirmDelete = async (): Promise<void> => {
+    if (!productToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteProduct(productToDelete.id);
+      setProductToDelete(null);
+      alert("Main product deleted successfully. Associated matches were unlinked.");
+    } catch (err) {
+      console.error("Failed to delete product:", err);
+      alert("Failed to delete product. Please check the console for details.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -261,6 +286,13 @@ const MainProducts: React.FC = () => {
                 >
                   Edit
                 </button>
+                <button
+                  onClick={() => setProductToDelete(product)}
+                  className="text-red-500 hover:text-red-700 text-sm font-medium"
+                  title="Delete main product"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
           ))}
@@ -274,6 +306,55 @@ const MainProducts: React.FC = () => {
           mainProductName={matrixProduct.name}
           onClose={() => setMatrixProduct(null)}
         />
+      )}
+
+      {/* Delete confirmation modal */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-start justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-900">
+                Delete Main Product
+              </h3>
+              <button
+                onClick={() => setProductToDelete(null)}
+                className="text-slate-400 hover:text-slate-600"
+                title="Cancel"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-2">
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-slate-900">
+                {productToDelete.name}
+              </span>
+              ?
+            </p>
+            <p className="text-sm text-slate-500 mb-6">
+              Associated matches will be unlinked and the linked supplier
+              products will become available for matching again.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setProductToDelete(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

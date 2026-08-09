@@ -204,14 +204,44 @@ export const deleteMainProduct = async (
       throw new AppError(`Main product with id '${id}' not found.`, 404);
     }
 
-    // Delete associated product matches first (foreign key constraint)
-    await prisma.productMatch.deleteMany({ where: { mainProductId: id } });
+    // Perform the deletion and match cleanup atomically:
+    //  1. Unlink every SupplierProduct that was linked to this main product
+    //     (clear `matchedMainProductId`) so they become available for matching
+    //     again. Their records are preserved.
+    //  2. Delete all ProductMatch records referencing this main product.
+    //  3. Delete the MainProduct record itself.
+    const result = await prisma.$transaction(async (tx) => {
+      // Collect the supplier products currently linked to this main product.
+      const linkedSupplierProducts = await tx.supplierProduct.findMany({
+        where: { matchedMainProductId: id },
+        select: { id: true },
+      });
 
-    await prisma.mainProduct.delete({ where: { id } });
+      // Unlink them so they can be matched again.
+      if (linkedSupplierProducts.length > 0) {
+        await tx.supplierProduct.updateMany({
+          where: { matchedMainProductId: id },
+          data: { matchedMainProductId: null },
+        });
+      }
+
+      // Delete associated product matches first (foreign key constraint).
+      const deletedMatches = await tx.productMatch.deleteMany({
+        where: { mainProductId: id },
+      });
+
+      await tx.mainProduct.delete({ where: { id } });
+
+      return {
+        unlinkedSupplierProducts: linkedSupplierProducts.length,
+        deletedMatches: deletedMatches.count,
+      };
+    });
 
     res.status(200).json({
       success: true,
       message: "Main product deleted successfully.",
+      data: result,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
