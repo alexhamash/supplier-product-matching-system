@@ -34,6 +34,8 @@ const SupplierProducts: React.FC = () => {
   const [products, setProducts] = useState<LocalProduct[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("All Statuses");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(20);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,6 +99,22 @@ const SupplierProducts: React.FC = () => {
 
     return (nameMatch || skuMatch) && statusMatch;
   });
+
+  // ─── Pagination ────────────────────────────────────────────────────────────
+  const totalItems = filteredProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+
+  // Clamp the current page so it never exceeds the last page (e.g. after the
+  // items-per-page selection shrinks the result set).
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * itemsPerPage;
+  const pageEnd = Math.min(pageStart + itemsPerPage, totalItems);
+  const paginatedProducts = filteredProducts.slice(pageStart, pageEnd);
+
+  // Reset to the first page whenever the search query or status filter changes.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
 
   const navigate = useNavigate();
 
@@ -173,7 +191,7 @@ const SupplierProducts: React.FC = () => {
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden mb-8 shadow-sm">
         {/* Table Header */}
         <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-slate-200 bg-slate-50">
-          <div className="col-span-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <div className="col-span-5 text-xs font-semibold text-slate-500 uppercase tracking-wider">
             Supplier Product
           </div>
           <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -182,26 +200,26 @@ const SupplierProducts: React.FC = () => {
           <div className="col-span-2 text-xs font-semibold text-slate-500 uppercase tracking-wider">
             Match Status
           </div>
-          <div className="col-span-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <div className="col-span-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
             Linked Main Product
           </div>
         </div>
 
         {/* Table Body */}
         <div className="divide-y divide-slate-100">
-          {filteredProducts.map((product) => (
+          {paginatedProducts.map((product) => (
             <div
               key={String(product.id)}
               className="grid grid-cols-12 gap-4 px-4 py-2.5 hover:bg-slate-50 transition-colors items-center"
             >
               {/* 1. Product Info */}
-              <div className="col-span-4 flex items-center gap-2 min-w-0">
-                <p className="text-sm font-semibold text-slate-800 truncate">
+              <div className="col-span-5 flex flex-col gap-0.5 min-w-0">
+                <p className="text-sm font-semibold text-slate-800 leading-snug">
                   {product.name}
                 </p>
                 {product.supplierSku && (
-                  <span className="text-xs text-slate-500 font-mono uppercase shrink-0">
-                    · {product.supplierSku}
+                  <span className="text-xs text-slate-400 font-mono uppercase">
+                    SKU: {product.supplierSku}
                   </span>
                 )}
               </div>
@@ -233,7 +251,7 @@ const SupplierProducts: React.FC = () => {
               </div>
 
               {/* 4. Action / Link */}
-              <div className="col-span-4">
+              <div className="col-span-3">
                 {isMatched(product) ? (
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -268,7 +286,7 @@ const SupplierProducts: React.FC = () => {
               </div>
             </div>
           ))}
-          {filteredProducts.length === 0 && (
+          {totalItems === 0 && (
             <div className="p-20 text-center border-t border-slate-100">
               <Package className="w-12 h-12 text-slate-200 mx-auto mb-3" />
               <p className="text-slate-500 font-medium">No products found</p>
@@ -278,6 +296,78 @@ const SupplierProducts: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Pagination Footer */}
+        {totalItems > 0 && (
+          <div className="bg-white border-t border-slate-200 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+            {/* Range + total count */}
+            <p className="text-sm text-slate-500">
+              Showing{" "}
+              <span className="font-medium text-slate-700">
+                {totalItems === 0 ? 0 : pageStart + 1}
+              </span>{" "}
+              to{" "}
+              <span className="font-medium text-slate-700">{pageEnd}</span> of{" "}
+              <span className="font-medium text-slate-700">{totalItems}</span>{" "}
+              items
+            </p>
+
+            {/* Page controls */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="px-3 py-1.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-600 transition-colors"
+              >
+                Previous
+              </button>
+
+              {/* Page numbers */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-8 h-8 text-sm font-medium rounded-lg transition-colors ${
+                      page === safePage
+                        ? "bg-blue-600 text-white"
+                        : "text-slate-600 border border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ),
+              )}
+
+              <button
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                disabled={safePage >= totalPages}
+                className="px-3 py-1.5 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-600 transition-colors"
+              >
+                Next
+              </button>
+            </div>
+
+            {/* Items per page */}
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <span>Rows per page</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="pl-2 pr-7 py-1.5 border border-slate-200 rounded-lg text-sm appearance-none bg-white cursor-pointer text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
