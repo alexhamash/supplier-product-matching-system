@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middlewares/errorHandler";
 import { runMatchingForSupplier } from "../services/matchingEngine";
+import { autoLinkByExactSku } from "../services/ingestionService";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -74,10 +75,17 @@ export const runMatching = async (
         confidenceThreshold: threshold,
       });
 
+      // Auto-link any unmatched supplier product whose raw SKU / smart SKU /
+      // title MPN exactly matches a MainProduct SKU (case-insensitive).
+      const autoLinkResult = await autoLinkByExactSku();
+
       res.status(200).json({
         success: true,
         message: `Matching complete for supplier '${supplier.name}'.`,
-        data: result,
+        data: {
+          ...result,
+          autoMatchedCount: autoLinkResult.autoMatchedCount,
+        },
         timestamp: new Date().toISOString(),
       });
       return;
@@ -113,6 +121,10 @@ export const runMatching = async (
       { totalSupplierProducts: 0, matchesCreated: 0, matchesSkipped: 0 },
     );
 
+    // Auto-link any unmatched supplier product whose raw SKU / smart SKU /
+    // title MPN exactly matches a MainProduct SKU (case-insensitive).
+    const autoLinkResult = await autoLinkByExactSku();
+
     res.status(200).json({
       success: true,
       message: `Matching complete for ${results.length} supplier(s).`,
@@ -120,6 +132,7 @@ export const runMatching = async (
         suppliersProcessed: results.length,
         results,
         totals,
+        autoMatchedCount: autoLinkResult.autoMatchedCount,
       },
       timestamp: new Date().toISOString(),
     });
@@ -456,10 +469,17 @@ export const linkMatch = async (
       });
     });
 
+    // Auto-link any OTHER unmatched supplier product whose raw SKU / smart SKU /
+    // title MPN exactly matches a MainProduct SKU (case-insensitive). This keeps
+    // the exact-SKU pass in sync whenever a link is created (e.g. the "Match All
+    // High Confidence (90%+)" bulk action).
+    const autoLinkResult = await autoLinkByExactSku();
+
     res.status(200).json({
       success: true,
       data: match,
       message: "Supplier product linked to main product.",
+      autoMatchedCount: autoLinkResult.autoMatchedCount,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

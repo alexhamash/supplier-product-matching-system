@@ -1,7 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middlewares/errorHandler";
-import { ingestSupplierFeed } from "../services/ingestionService";
+import {
+  ingestSupplierFeed,
+  linkExactMatches,
+  autoLinkByExactSku,
+} from "../services/ingestionService";
 import { toGoogleSheetsCsvUrl, FeedMappingError } from "../services/feedParser";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -146,10 +150,25 @@ export const syncSupplierFeed = async (
 
     const result = await ingestSupplierFeed(supplierId);
 
+    // Run the exact-SKU auto-link pass after ingestion completes. This catches
+    // any supplier products whose matching MainProduct was added to the catalog
+    // after they were ingested, and returns the authoritative auto-match count.
+    const exactMatchResult = await linkExactMatches(supplierId);
+
+    // Run the global auto-link pass across ALL unmatched supplier products. This
+    // runs at the end of every supplier feed sync so any product that was not
+    // linked during ingestion (e.g. its MainProduct was added later) still gets
+    // linked when its SKU exactly matches a MainProduct SKU.
+    const globalAutoLinkResult = await autoLinkByExactSku();
+
     res.status(200).json({
       success: true,
       message: `Feed sync completed for supplier '${supplier.name}'.`,
-      data: result,
+      data: {
+        ...result,
+        autoMatchedCount:
+          exactMatchResult.autoMatchedCount + globalAutoLinkResult.autoMatchedCount,
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (err) {

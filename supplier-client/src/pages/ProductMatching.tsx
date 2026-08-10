@@ -32,7 +32,14 @@ const ProductMatching: React.FC = () => {
     loading,
   } = useProducts();
 
-  const [activeItem, setActiveItem] = useState<number>(0);
+  // Id of the currently selected Main Product. Stored by id (not array index)
+  // so the right panel always reflects the clicked product even when the left
+  // list is filtered by search / status.
+  const [selectedMainProductId, setSelectedMainProductId] = useState<string | null>(null);
+  // Whether AI suggestions for the newly selected main product are still loading.
+  // While true, the right panel shows a loading state and old suggestions are
+  // cleared so stale items never flash for the wrong product.
+  const [suggestionsLoading, setSuggestionsLoading] = useState<boolean>(false);
   const [showLinked, setShowLinked] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -100,7 +107,10 @@ const ProductMatching: React.FC = () => {
     }
   }, [supplier, loadSupplierProducts]);
 
-  const selectedProduct = products[activeItem] || null;
+  // Resolve the selected main product by id so the right panel always reflects
+  // the clicked item, regardless of how the left list is filtered.
+  const selectedProduct =
+    products.find((p) => String(p.id) === String(selectedMainProductId)) || null;
 
   // A supplier product is "matched" if it has a confirmed link persisted on the
   // backend. This is derived from BOTH the `matchedMainProductId` field on the
@@ -115,17 +125,21 @@ const ProductMatching: React.FC = () => {
   const unmatchedProducts = supplierProducts.filter((p) => !isMatched(p));
 
   // AI suggestions are filtered to a minimum 50% confidence threshold so that
-  // low-confidence noise is not shown to the user.
-  const finalItems = !showLinked
-    ? selectedProduct
-      ? getSupplierSuggestions(selectedProduct, unmatchedProducts).filter(
-          (s) => s.confidence >= 50,
-        )
-      : []
-    : supplierProducts.filter(
-        (p) =>
-          isMatched(p) && linkedMainProductId(p) === selectedProduct?.id,
-      );
+  // low-confidence noise is not shown to the user. While suggestions for a newly
+  // selected main product are loading, the list is cleared so stale items from
+  // the previously selected product never flash.
+  const finalItems = suggestionsLoading
+    ? []
+    : !showLinked
+      ? selectedProduct
+        ? getSupplierSuggestions(selectedProduct, unmatchedProducts).filter(
+            (s) => s.confidence >= 50,
+          )
+        : []
+      : supplierProducts.filter(
+          (p) =>
+            isMatched(p) && linkedMainProductId(p) === selectedProduct?.id,
+        );
 
   const uniqueSuppliersCount = new Set(
     supplierProducts
@@ -149,6 +163,25 @@ const ProductMatching: React.FC = () => {
    */
   const hasValidMainProductId = (product: MainProduct | null): boolean =>
     Boolean(product && product.id && product.id.trim() !== "");
+
+  /**
+   * Select a main product from the left catalog. Updates the selected product
+   * immediately (by id), clears any old AI suggestions, and shows a loading
+   * state over the right panel while the new suggestions are being prepared.
+   */
+  const handleSelectMainProduct = (product: MainProduct): void => {
+    setSelectedMainProductId(String(product.id));
+    setShowLinked(false);
+    setSuggestionsLoading(true);
+  };
+
+  // Clear the suggestions loading state shortly after a main product is
+  // selected so the freshly computed suggestions can render.
+  useEffect(() => {
+    if (!suggestionsLoading) return;
+    const timer = setTimeout(() => setSuggestionsLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, [suggestionsLoading, selectedMainProductId]);
 
   /**
    * Link a specific supplier product to a main product via the backend
@@ -247,7 +280,7 @@ const ProductMatching: React.FC = () => {
   // product changes or the suggestions list is refreshed.
   useEffect(() => {
     setFocusedIndex(0);
-  }, [activeItem, finalItems.length]);
+  }, [selectedMainProductId, finalItems.length]);
 
   // Global keyboard shortcuts for the matching workspace:
   //   ArrowDown / ArrowUp  -> navigate between unmatched suggestion rows
@@ -539,9 +572,11 @@ const ProductMatching: React.FC = () => {
               {filteredMainProducts.map((item, index) => (
                 <div
                   key={item.id ? `${item.id}-${index}` : index}
-                  onClick={() => setActiveItem(index)}
+                  onClick={() => handleSelectMainProduct(item)}
                   className={`cursor-pointer px-4 py-3 transition-colors ${
-                    activeItem === index ? "bg-indigo-50/70" : "hover:bg-slate-50/80"
+                    String(item.id) === String(selectedMainProductId)
+                      ? "bg-indigo-50/70"
+                      : "hover:bg-slate-50/80"
                   }`}
                 >
                   <div className="flex justify-between items-center gap-2">
@@ -678,9 +713,12 @@ const ProductMatching: React.FC = () => {
                 )}
               </h4>
 
-              {productsLoading ? (
-                <div className="text-center py-8 text-slate-400 italic text-sm">
-                  Loading supplier products...
+              {productsLoading || suggestionsLoading ? (
+                <div className="text-center py-8 text-slate-400 italic text-sm flex flex-col items-center gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-indigo-500" />
+                  {suggestionsLoading
+                    ? "Loading suggestions..."
+                    : "Loading supplier products..."}
                 </div>
               ) : (
                 <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">

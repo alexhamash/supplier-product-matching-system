@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middlewares/errorHandler";
 import { importMainProducts } from "../services/mainProductImportService";
+import { autoLinkByExactSku } from "../services/ingestionService";
 import { FeedMappingError } from "../services/feedParser";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -401,10 +402,18 @@ export const importMainProductsFromFeed = async (
       stopWords: body.stopWords,
     });
 
+    // Run the global auto-link pass across ALL unmatched supplier products. This
+    // runs at the end of every main products import so any supplier product whose
+    // SKU now exactly matches a freshly-imported MainProduct SKU gets linked.
+    const autoLinkResult = await autoLinkByExactSku();
+
     res.status(200).json({
       success: true,
       message: `Catalog import completed: ${result.created} created, ${result.updated} updated.`,
-      data: result,
+      data: {
+        ...result,
+        autoMatchedCount: autoLinkResult.autoMatchedCount,
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
