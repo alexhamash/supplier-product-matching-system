@@ -85,6 +85,7 @@ export const ingestSupplierFeed = async (
         | null
         | undefined,
       stopWords: supplier.stopWords,
+      supplierName: supplier.name,
     },
   );
 

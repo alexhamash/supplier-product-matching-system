@@ -1,6 +1,7 @@
 import axios from "axios";
 import { parse } from "csv-parse/sync";
 import type { FeedType } from "@prisma/client";
+import { extractSmartSku } from "../utils/skuUtils";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +43,8 @@ export type FeedParseOptions = {
   customMapping?: FeedColumnMapping | null;
   /** Comma-separated negative keywords; rows whose title contains any are skipped. */
   stopWords?: string | null;
+  /** Supplier name used to build fallback hash SKUs (e.g. "GRO-8F92A"). */
+  supplierName?: string | null;
 };
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
@@ -155,42 +158,6 @@ const findHeaderRowIndex = (rows: string[][]): number | null => {
     if (isHeaderRow(rows[i])) return i;
   }
   return null;
-};
-
-// ─── Fallback SKU Generation ────────────────────────────────────────────────
-
-/**
- * Slugify a product title into a URL/identifier-safe string.
- *
- * Handles Cyrillic (Ukrainian/Russian) characters by transliterating them to
- * Latin, then lowercases and collapses runs of non-alphanumeric characters into
- * a single hyphen. Returns an empty string when the input contains no usable
- * characters.
- *
- * Examples:
- *   "Чохол для iPhone 15"  → "chohol-dlya-iphone-15"
- *   "USB-C Cable 2m"       → "usb-c-cable-2m"
- */
-const slugify = (value: string): string => {
-  const translitMap: Record<string, string> = {
-    а: "a", б: "b", в: "v", г: "h", ґ: "g", д: "d", е: "e", є: "ie",
-    ж: "zh", з: "z", и: "y", і: "i", ї: "i", й: "i", к: "k", л: "l",
-    м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u",
-    ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "shch", ь: "", ю: "iu",
-    я: "ia",
-  };
-
-  const transliterated = value
-    .toLowerCase()
-    .split("")
-    .map((char) => translitMap[char] ?? char)
-    .join("");
-
-  const slug = transliterated
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return slug;
 };
 
 // ─── Price Normalisation ────────────────────────────────────────────────────
@@ -587,15 +554,13 @@ export const parseCsvProducts = (
     }
 
     // ─── Determine the SKU ──────────────────────────────────────────────────
-    // Use the mapped column when present and non-empty; otherwise generate a
-    // deterministic fallback SKU derived from the product title.
-    let sku = skuIndex !== null && skuIndex >= 0
+    // Use the mapped column when present and non-empty; otherwise derive a
+    // clean, short SKU via `extractSmartSku` (real MPN from the title, or a
+    // short hash fallback — never a long title slug).
+    const rawSku = skuIndex !== null && skuIndex >= 0
       ? (record[skuIndex] ?? "").trim()
       : "";
-    if (sku === "") {
-      const slug = slugify(title);
-      sku = slug ? `SUPPLIER_SKU_${slug}` : `SUPPLIER_SKU_${products.length + 1}`;
-    }
+    const sku = extractSmartSku(title, rawSku, options?.supplierName ?? undefined);
 
     // Stop-word filtering: skip rows whose title contains any negative keyword.
     if (stopWords.length > 0) {
