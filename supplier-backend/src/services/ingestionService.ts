@@ -90,7 +90,6 @@ export const ingestSupplierFeed = async (
   );
 
   const totalRows = products.length;
-  const skusInFeed = new Set(products.map((p) => p.sku));
 
   // 3. Upsert products and handle out-of-stock transitions inside a transaction.
   const result = await prisma.$transaction(async (tx) => {
@@ -104,12 +103,39 @@ export const ingestSupplierFeed = async (
       existingProducts.map((p) => [p.rawSku, p]),
     );
 
+    // Tracks rawSkus already used in THIS batch so duplicate SKUs within a single
+    // feed payload are disambiguated with a numeric suffix (e.g. `GRO-8F92A-2`),
+    // keeping every rawSku unique for the supplier. This covers both duplicate
+    // rows in the feed and two different titles hashing to the same fallback SKU.
+    const seenSkusInBatch = new Set<string>();
+    // The rawSkus actually stored this run (used to detect out-of-stock rows).
+    const storedSkus = new Set<string>();
+
     let created = 0;
     let updated = 0;
     let unchanged = 0;
 
     for (const product of products) {
-      const existing = existingBySku.get(product.sku);
+      // ─── Resolve a unique rawSku for this row within the batch ─────────────
+      // The first occurrence of a rawSku keeps the base SKU; later occurrences
+      // get a numeric suffix so they never collide on (supplierId, rawSku).
+      let rawSku = product.sku;
+      if (seenSkusInBatch.has(rawSku)) {
+        let suffix = 2;
+        let candidate = `${rawSku}-${suffix}`;
+        while (
+          seenSkusInBatch.has(candidate) ||
+          existingBySku.has(candidate)
+        ) {
+          suffix++;
+          candidate = `${rawSku}-${suffix}`;
+        }
+        rawSku = candidate;
+      }
+      seenSkusInBatch.add(rawSku);
+      storedSkus.add(rawSku);
+
+      const existing = existingBySku.get(rawSku);
 
       // A product is "available" only when it has a valid, positive price.
       // Unpriced rows are stored with `price: 0` (the schema's `price` column is
@@ -120,32 +146,46 @@ export const ingestSupplierFeed = async (
 
       if (!existing) {
         // New SKU → create.
-        await tx.supplierProduct.create({
+        const createdRecord = await tx.supplierProduct.create({
           data: {
             supplierId,
-            rawSku: product.sku,
+            rawSku,
             rawName: product.name,
             price: effectivePrice,
             inStock: isAvailable,
           },
         });
+        // Track it so a later duplicate in the same batch resolves correctly.
+        existingBySku.set(rawSku, {
+          id: createdRecord.id,
+          rawSku,
+          price: effectivePrice,
+          inStock: isAvailable,
+        });
         created++;
         continue;
       }
 
-      // Existing SKU → update price/title and availability.
+      // Existing SKU → update price/title and availability. The compound unique
+      // key (supplierId, rawSku) is used directly so the update targets exactly
+      // the record the unique constraint refers to.
       const needsUpdate =
         existing.inStock !== isAvailable ||
         existing.price !== effectivePrice;
 
       if (needsUpdate) {
         await tx.supplierProduct.update({
-          where: { id: existing.id },
+          where: { supplierId_rawSku: { supplierId, rawSku } },
           data: {
             rawName: product.name,
             price: effectivePrice,
             inStock: isAvailable,
           },
+        });
+        existingBySku.set(rawSku, {
+          ...existing,
+          price: effectivePrice,
+          inStock: isAvailable,
         });
         updated++;
       } else {
@@ -157,7 +197,7 @@ export const ingestSupplierFeed = async (
     // records are KEPT so existing ProductMatch relations are preserved. Only
     // transition products that are currently available (avoid redundant writes).
     const missingSkus = existingProducts
-      .filter((p) => !skusInFeed.has(p.rawSku) && p.inStock === true)
+      .filter((p) => !storedSkus.has(p.rawSku) && p.inStock === true)
       .map((p) => p.id);
 
     if (missingSkus.length > 0) {
