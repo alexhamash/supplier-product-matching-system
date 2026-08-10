@@ -53,6 +53,16 @@ export type FeedParseOptions = {
   stopWords?: string | null;
   /** Supplier name used to build fallback hash SKUs (e.g. "GRO-8F92A"). */
   supplierName?: string | null;
+  /** Number of characters to keep from the fallback SKU prefix (default 3). */
+  prefixLength?: number | null;
+  /**
+   * Whether a price column is required (default true).
+   *
+   * When `false` (used for Main Product imports where price is optional), a
+   * missing / unmapped price column does NOT throw a FeedMappingError. Rows are
+   * still parsed and their price defaults to 0.
+   */
+  requirePrice?: boolean;
 };
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
@@ -415,6 +425,9 @@ export const parseCsvProducts = (
   const startRow = options?.startRow ?? 1;
   const customMapping = options?.customMapping ?? null;
   const stopWords = parseStopWords(options?.stopWords);
+  // When `requirePrice` is false (Main Product import), a missing price column
+  // is tolerated and rows default to a price of 0 instead of being rejected.
+  const requirePrice = options?.requirePrice ?? true;
 
   // Parse as raw arrays so we can honour startRow and custom column mapping.
   const records = parse(csvText, {
@@ -501,11 +514,13 @@ export const parseCsvProducts = (
     }
   }
 
-  // A price column is strictly required — without it we cannot build products.
-  // A missing SKU column is NOT fatal: a fallback SKU is generated per row from
-  // the product title (see the row loop below). Throw a FeedMappingError (a
-  // validation error) so callers can surface it as a 400 rather than a 500.
-  if (priceIndex === null || priceIndex < 0) {
+  // A price column is strictly required for supplier feeds — without it we
+  // cannot build products. A missing SKU column is NOT fatal: a fallback SKU is
+  // generated per row from the product title (see the row loop below).
+  //
+  // For Main Product imports (`requirePrice === false`) the price column is
+  // optional: rows are still parsed and their price defaults to 0.
+  if ((priceIndex === null || priceIndex < 0) && requirePrice) {
     const available = customMapping
       ? `customMapping: ${JSON.stringify(customMapping)}`
       : `Available rows: ${JSON.stringify(dataRows.slice(0, HEADER_SCAN_ROWS))}`;
@@ -548,7 +563,9 @@ export const parseCsvProducts = (
       continue;
     }
 
-    const price = parsePrice(record[priceIndex]);
+    let price = priceIndex !== null && priceIndex >= 0
+      ? parsePrice(record[priceIndex])
+      : null;
     const name = nameIndex !== null && nameIndex >= 0
       ? (record[nameIndex] ?? "").trim()
       : "";
@@ -560,8 +577,14 @@ export const parseCsvProducts = (
     // NOT added as a product. This is enforced by requiring `price > 0` below.
     //
     // ─── Require valid price & meaningful title ─────────────────────────────
-    // Only save rows where `price > 0` and `title.length > 2`.
-    if (title.length <= 2 || price === null || price <= 0) {
+    // Only save rows where `price > 0` and `title.length > 2`. When
+    // `requirePrice` is false (Main Product import), a missing/unparseable
+    // price defaults to 0 and the row is still kept (price is optional).
+    if (requirePrice === false && price === null) {
+      price = 0;
+    }
+
+    if (title.length <= 2 || (requirePrice && (price === null || price <= 0))) {
       skippedRows++;
       continue;
     }
@@ -573,7 +596,12 @@ export const parseCsvProducts = (
     const rawSku = skuIndex !== null && skuIndex >= 0
       ? (record[skuIndex] ?? "").trim()
       : "";
-    const sku = extractSmartSku(title, rawSku, options?.supplierName ?? undefined);
+    const sku = extractSmartSku(
+      title,
+      rawSku,
+      options?.supplierName ?? undefined,
+      options?.prefixLength ?? undefined,
+    );
 
     // Stop-word filtering: skip rows whose title contains any negative keyword.
     if (stopWords.length > 0) {
@@ -597,7 +625,7 @@ export const parseCsvProducts = (
     products.push({
       sku,
       name: title,
-      price,
+      price: price ?? 0,
       ...(brand !== "" && { brand }),
       ...(category !== "" && { category }),
     });

@@ -108,14 +108,14 @@ export const extractMpn = (title: string): string | null => {
 
 /**
  * Derive a short, deterministic supplier prefix from a supplier name.
- * Uppercases and keeps only the first 3 alphanumeric characters.
- * Falls back to "SUP" when the name yields no usable characters.
+ * Uppercases and keeps only the first `length` alphanumeric characters
+ * (default 3). Falls back to "SUP" when the name yields no usable characters.
  */
-export const supplierPrefix = (supplierName?: string): string => {
+export const supplierPrefix = (supplierName?: string, length = 3): string => {
   const cleaned = (supplierName ?? "")
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "");
-  return cleaned.slice(0, 3) || "SUP";
+  return cleaned.slice(0, length) || "SUP";
 };
 
 /**
@@ -143,12 +143,15 @@ const shortHash = (value: string, length = 5): string => {
  * @param title        The product title/name (used for MPN extraction & hash).
  * @param rawSku       An optional explicit SKU provided by the supplier.
  * @param supplierName Optional supplier name used to build the fallback prefix.
+ * @param prefixLength Number of characters to keep from the fallback prefix
+ *                     (default 3, e.g. "MAI" from "MAIN"). Pass 4 to get "MAIN".
  * @returns A clean, short SKU string.
  */
 export const extractSmartSku = (
   title: string,
   rawSku?: string,
   supplierName?: string,
+  prefixLength = 3,
 ): string => {
   // 1. Trust a clean, short raw SKU when provided.
   if (rawSku && isCleanRawSku(rawSku)) {
@@ -162,7 +165,7 @@ export const extractSmartSku = (
   }
 
   // 3. Fall back to a short hash SKU (never a long title slug).
-  const prefix = supplierPrefix(supplierName);
+  const prefix = supplierPrefix(supplierName, prefixLength);
   const hash = shortHash(title);
   return `${prefix}-${hash}`;
 };

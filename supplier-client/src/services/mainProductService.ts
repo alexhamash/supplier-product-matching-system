@@ -10,6 +10,8 @@ import type {
   CreateMainProductPayload,
   UpdateMainProductPayload,
   SupplierMatrix,
+  ImportMainProductsPayload,
+  ImportMainProductsResponse,
 } from '../types';
 
 // ─── Mapping helpers ────────────────────────────────────────────────────────
@@ -105,4 +107,19 @@ export const getMainProductMatrix = async (
   id: string,
 ): Promise<SupplierMatrix> => {
   return apiClient.get<SupplierMatrix>(`main-products/${id}/matrix`);
+};
+
+/**
+ * POST /api/main-products/import
+ * Batch-import Main Products into the central catalog from a Google Sheet / CSV
+ * feed. The backend fetches and parses the feed, then upserts each product by
+ * SKU.
+ *
+ * @param payload - Feed URL, feed type, and optional field mapping.
+ * @returns A summary with created / updated item counts.
+ */
+export const importMainProducts = async (
+  payload: ImportMainProductsPayload,
+): Promise<ImportMainProductsResponse> => {
+  return apiClient.post<ImportMainProductsResponse>('main-products/import', payload);
 };

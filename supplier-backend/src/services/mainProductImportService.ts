@@ -63,11 +63,22 @@ export const importMainProducts = async (
   options: MainProductImportOptions,
 ): Promise<MainProductImportResult> => {
   // 1 & 2. Fetch and parse the feed, honouring the advanced feed configuration.
+  //
+  // Main Product imports are title-driven: neither a SKU nor a price column is
+  // required. When no SKU column is mapped, the parser derives a fallback SKU
+  // from each row's title via `extractSmartSku`. We pass a "MAIN" supplier name
+  // with a 4-char prefix so those fallback SKUs look like `MAIN-XXXXXX` (rather
+  // than the default 3-char `SUP-XXXXXX`). Rows are never skipped for lacking a
+  // SKU, and `requirePrice: false` means a missing price column defaults to 0
+  // instead of throwing a "Price column missing" error.
   const { products, skippedRows } = await fetchAndParseFeed(feedUrl, options.feedType, {
     sheetGid: options.sheetGid,
     startRow: options.startRow,
     customMapping: options.customMapping,
     stopWords: options.stopWords,
+    supplierName: "MAIN",
+    prefixLength: 4,
+    requirePrice: false,
   });
 
   const totalRows = products.length;

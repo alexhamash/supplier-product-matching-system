@@ -9,6 +9,7 @@ import {
   XCircle,
   SearchCode,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
@@ -39,6 +40,12 @@ const ProductMatching: React.FC = () => {
   const [productsLoading, setProductsLoading] = useState<boolean>(false);
   const [linkingId, setLinkingId] = useState<string | null>(null);
   const [runningAuto, setRunningAuto] = useState<boolean>(false);
+  // Index of the currently focused suggestion row for keyboard navigation.
+  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  // Id of the supplier product currently playing the "matched" slide-out animation.
+  const [justMatchedId, setJustMatchedId] = useState<string | null>(null);
+  // Whether the bulk "Match All High Confidence" action is currently running.
+  const [bulkMatching, setBulkMatching] = useState<boolean>(false);
 
   // Map of supplierProductId -> mainProductId representing confirmed links,
   // derived from APPROVED ProductMatch records returned by the backend. This
@@ -93,8 +100,6 @@ const ProductMatching: React.FC = () => {
     }
   }, [supplier, loadSupplierProducts]);
 
-  if (loading) return <div>Завантаження...</div>;
-
   const selectedProduct = products[activeItem] || null;
 
   // A supplier product is "matched" if it has a confirmed link persisted on the
@@ -109,9 +114,13 @@ const ProductMatching: React.FC = () => {
 
   const unmatchedProducts = supplierProducts.filter((p) => !isMatched(p));
 
+  // AI suggestions are filtered to a minimum 50% confidence threshold so that
+  // low-confidence noise is not shown to the user.
   const finalItems = !showLinked
     ? selectedProduct
-      ? getSupplierSuggestions(selectedProduct, unmatchedProducts)
+      ? getSupplierSuggestions(selectedProduct, unmatchedProducts).filter(
+          (s) => s.confidence >= 50,
+        )
       : []
     : supplierProducts.filter(
         (p) =>
@@ -142,19 +151,24 @@ const ProductMatching: React.FC = () => {
     Boolean(product && product.id && product.id.trim() !== "");
 
   /**
-   * Link a specific supplier product to the selected main product via the
-   * backend `POST /api/matching/link` endpoint.
+   * Link a specific supplier product to a main product via the backend
+   * `POST /api/matching/link` endpoint. Defaults to the currently selected main
+   * product, but can be overridden (e.g. by the Quick Match button on a main
+   * product card).
    */
-  const handleLink = async (supplierProduct: SupplierProduct): Promise<void> => {
-    if (!selectedProduct) {
+  const handleLink = async (
+    supplierProduct: SupplierProduct,
+    targetProduct: MainProduct | null = selectedProduct,
+  ): Promise<void> => {
+    if (!targetProduct) {
       toast.error("Оберіть основний товар для зв'язування");
       return;
     }
 
-    if (!hasValidMainProductId(selectedProduct)) {
+    if (!hasValidMainProductId(targetProduct)) {
       console.error(
         "Cannot link: selected main product has no valid database ID.",
-        selectedProduct,
+        targetProduct,
       );
       toast.error("Основний товар не має дійсного ID у базі даних");
       return;
@@ -164,26 +178,31 @@ const ProductMatching: React.FC = () => {
     try {
       await linkMatch({
         supplierProductId: String(supplierProduct.id),
-        mainProductId: String(selectedProduct.id),
+        mainProductId: String(targetProduct.id),
       });
+
+      // Trigger the slide-out animation on the matched row so the user sees
+      // smooth feedback before the item is removed from the suggestions list.
+      setJustMatchedId(String(supplierProduct.id));
+      await new Promise((resolve) => setTimeout(resolve, 450));
 
       // Optimistically reflect the link in the local list so the UI updates
       // immediately, then refetch from the backend to keep state in sync.
       setSupplierProducts((prev) =>
         prev.map((p) =>
           String(p.id) === String(supplierProduct.id)
-            ? { ...p, matchedMainProductId: String(selectedProduct.id) }
+            ? { ...p, matchedMainProductId: String(targetProduct.id) }
             : p,
         ),
       );
       setApprovedMatches((prev) => ({
         ...prev,
-        [String(supplierProduct.id)]: String(selectedProduct.id),
+        [String(supplierProduct.id)]: String(targetProduct.id),
       }));
 
       setProducts(
         products.map((p) =>
-          p.id === selectedProduct.id
+          p.id === targetProduct.id
             ? { ...p, linkedCount: (p.linkedCount || 0) + 1 }
             : p,
         ),
@@ -201,6 +220,7 @@ const ProductMatching: React.FC = () => {
 
       toast.success(`Зв'язано: ${supplierProduct.name}`, {
         duration: 4000,
+        className: "match-toast",
         style: {
           border: "1px solid #10B981",
           padding: "16px",
@@ -219,8 +239,51 @@ const ProductMatching: React.FC = () => {
       toast.error("Не вдалося зв'язати товар");
     } finally {
       setLinkingId(null);
+      setJustMatchedId(null);
     }
   };
+
+  // Reset keyboard focus to the top suggestion whenever the selected main
+  // product changes or the suggestions list is refreshed.
+  useEffect(() => {
+    setFocusedIndex(0);
+  }, [activeItem, finalItems.length]);
+
+  // Global keyboard shortcuts for the matching workspace:
+  //   ArrowDown / ArrowUp  -> navigate between unmatched suggestion rows
+  //   Enter / Space        -> Quick Match the currently focused suggestion
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      // Keyboard shortcuts only apply to the AI suggestions view.
+      if (showLinked || finalItems.length === 0) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setFocusedIndex((i) => Math.min(i + 1, finalItems.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setFocusedIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        const item = finalItems[focusedIndex] ?? finalItems[0];
+        if (item && !linkingId) {
+          void handleLink(item);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [finalItems, focusedIndex, showLinked, linkingId, handleLink]);
 
   /**
    * Unlink a supplier product from the selected main product.
@@ -298,6 +361,65 @@ const ProductMatching: React.FC = () => {
     }
   };
 
+  /**
+   * Bulk-link the top AI suggestion for every main product whose best match
+   * confidence is >= 90%. Each supplier product is linked at most once, and a
+   * summary toast reports how many items were linked.
+   */
+  const handleBulkMatchAll = async (): Promise<void> => {
+    setBulkMatching(true);
+    let linkedCount = 0;
+    const linkedSupplierIds = new Set<string>();
+    try {
+      for (const mainProduct of products) {
+        const suggestions = getSupplierSuggestions(mainProduct, unmatchedProducts);
+        const top = suggestions[0];
+        if (!top || top.confidence < 90) continue;
+        if (linkedSupplierIds.has(String(top.id))) continue;
+        linkedSupplierIds.add(String(top.id));
+        try {
+          await linkMatch({
+            supplierProductId: String(top.id),
+            mainProductId: String(mainProduct.id),
+          });
+          linkedCount += 1;
+        } catch (err) {
+          console.error("Bulk match failed for supplier product:", top.id, err);
+        }
+      }
+
+      // Re-sync the linked state from the backend after bulk linking.
+      await loadSupplierProducts();
+      await loadApprovedMatches();
+      await refresh();
+
+      toast.success(
+        `Зв'язано ${linkedCount} товарів з високою впевненістю (90%+)`,
+        {
+          duration: 4000,
+          className: "match-toast",
+          style: {
+            border: "1px solid #10B981",
+            padding: "16px",
+            color: "#064E3B",
+            background: "#ECFDF5",
+            fontWeight: "600",
+            borderRadius: "12px",
+          },
+          iconTheme: {
+            primary: "#10B981",
+            secondary: "#FFFAEE",
+          },
+        },
+      );
+    } catch (err) {
+      console.error("Failed to run bulk matching:", err);
+      toast.error("Не вдалося виконати масове співставлення");
+    } finally {
+      setBulkMatching(false);
+    }
+  };
+
   const filteredMainProducts = products.filter((product): boolean => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -312,6 +434,8 @@ const ProductMatching: React.FC = () => {
 
     return matchesSearch && matchesStatus;
   });
+
+  if (loading) return <div>Завантаження...</div>;
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -346,6 +470,16 @@ const ProductMatching: React.FC = () => {
           >
             <Sparkles className={`w-3.5 h-3.5 ${runningAuto ? "animate-pulse" : ""}`} />
             {runningAuto ? "Running..." : "Auto-Link All (AI)"}
+          </button>
+          <button
+            onClick={() => void handleBulkMatchAll()}
+            disabled={bulkMatching}
+            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors shadow-sm"
+          >
+            <Zap className={`w-3.5 h-3.5 ${bulkMatching ? "animate-pulse" : ""}`} />
+            {bulkMatching
+              ? "Matching..."
+              : "⚡ Match All High Confidence (90%+)"}
           </button>
         </div>
       </div>
@@ -555,10 +689,16 @@ const ProductMatching: React.FC = () => {
                       {finalItems.map((item, index) => {
                         const confidence = (item as { confidence?: number }).confidence ?? 0;
                         const isLinking = linkingId === String(item.id);
+                        const isFocused = focusedIndex === index;
+                        const isMatched = justMatchedId === String(item.id);
                         return (
                           <div
                             key={item.id ? `${item.id}-${index}` : index}
-                            className="px-4 py-2.5 hover:bg-slate-50/70 transition-colors flex items-center justify-between gap-3"
+                            className={`px-4 py-2.5 transition-colors flex items-center justify-between gap-3 ${
+                              isFocused
+                                ? "bg-indigo-50/70 ring-1 ring-inset ring-indigo-200"
+                                : "hover:bg-slate-50/70"
+                            } ${isMatched ? "matched-slide-out" : ""}`}
                           >
                             {/* Left: title + supplier name badge */}
                             <div className="flex-1 min-w-0 flex items-center">
@@ -609,7 +749,7 @@ const ProductMatching: React.FC = () => {
                   ) : (
                     <div className="text-center py-8 text-slate-400 italic text-sm">
                       {!showLinked
-                        ? "No suggestions found for this item"
+                        ? "No high-confidence AI matches found"
                         : "No products linked to this item yet"}
                     </div>
                   )}
@@ -619,6 +759,24 @@ const ProductMatching: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Animation styles for match feedback */}
+      <style>{`
+        @keyframes matchSlideOut {
+          0% { opacity: 1; transform: translateX(0); }
+          100% { opacity: 0; transform: translateX(48px); }
+        }
+        .matched-slide-out {
+          animation: matchSlideOut 0.45s ease-in forwards;
+        }
+        @keyframes toastSlideIn {
+          0% { opacity: 0; transform: translateY(-12px) scale(0.96); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .match-toast {
+          animation: toastSlideIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };

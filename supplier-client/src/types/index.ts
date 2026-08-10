@@ -197,6 +197,35 @@ export interface UpdateMainProductPayload {
   price?: number;
 }
 
+/** Manual column mapping for a Main Product import feed. */
+export interface MainProductImportMapping {
+  skuCol?: string;
+  titleCol?: string;
+  priceCol?: string;
+  brandCol?: string;
+  categoryCol?: string;
+}
+
+/** Payload for POST /api/main-products/import. */
+export interface ImportMainProductsPayload {
+  feedUrl: string;
+  feedType: 'CSV' | 'GOOGLE_SHEETS';
+  sheetGid?: string | null;
+  startRow?: number | null;
+  customMapping?: MainProductImportMapping | null;
+  stopWords?: string | null;
+}
+
+/** Response from POST /api/main-products/import. */
+export interface ImportMainProductsResponse {
+  totalRows: number;
+  skippedRows: number;
+  created: number;
+  updated: number;
+  skippedNoSku: number;
+  importedAt: string;
+}
+
 /** Payload for creating a supplier via the API. */
 export interface CreateSupplierPayload {
   name: string;
