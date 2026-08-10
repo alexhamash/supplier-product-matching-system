@@ -18,7 +18,7 @@ export interface SupplierProduct {
   status: 'matched' | 'unmatched';
   confidence?: number;
   mainProductId?: string | null;
-  supplierId?: number;
+  supplierId?: string;
   supplierSku?: string;
   /** The id of the MainProduct this supplier product is currently linked to. */
   matchedMainProductId?: string | null;

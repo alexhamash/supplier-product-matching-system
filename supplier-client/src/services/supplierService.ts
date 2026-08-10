@@ -63,7 +63,7 @@ const toSupplierProduct = (api: ApiSupplierProduct): SupplierProduct => ({
   price: api.price,
   status: api.isMatched ? 'matched' : 'unmatched',
   supplierSku: api.rawSku,
-  supplierId: Number(api.supplierId) || undefined,
+  supplierId: api.supplierId || undefined,
   matchedMainProductId: api.matchedMainProductId ?? null,
   isMatched: api.isMatched ?? Boolean(api.matchedMainProductId),
   linkedMainProduct: api.linkedMainProduct ?? null,
@@ -176,10 +176,10 @@ export const getAllSupplierProducts = async (
     suppliers.map(async (supplier) => {
       try {
         const products = await getSupplierProducts(supplier.id);
-        // Ensure each product carries its supplier id
+        // Ensure each product carries its owning supplier's id (a UUID string).
         return products.map((p) => ({
           ...p,
-          supplierId: Number(supplier.id) || undefined,
+          supplierId: supplier.id,
         }));
       } catch (err) {
         console.error(
@@ -224,6 +224,7 @@ export const importSupplierProducts = async (
  *
  * @deprecated Will be removed once all pages migrate to the new API.
  */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 export const importSupplierData = (
   _supplierId: number,
 ): Promise<{ count: number; products: SupplierProduct[] }> => {
@@ -232,6 +233,7 @@ export const importSupplierData = (
   );
   return Promise.resolve({ count: 0, products: [] });
 };
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 /**
  * Legacy in-memory link function.
@@ -240,6 +242,7 @@ export const importSupplierData = (
  *
  * @deprecated
  */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 export const linkProduct = (
   _supplierProductId: number | string,
   _mainProductId: number,
@@ -249,3 +252,4 @@ export const linkProduct = (
   );
   return { success: false };
 };
+/* eslint-enable @typescript-eslint/no-unused-vars */
