@@ -13,6 +13,10 @@ export type ParsedFeedProduct = {
   sku: string;
   name: string;
   price: number;
+  /** Optional brand captured from a mapped brand column. */
+  brand?: string;
+  /** Optional category captured from a mapped category column. */
+  category?: string;
 };
 
 export type ParseFeedResult = {
@@ -29,6 +33,10 @@ export type FeedColumnMapping = {
   skuCol?: string;
   titleCol?: string;
   priceCol?: string;
+  /** Optional column letter for the product brand (e.g. "D"). */
+  brandCol?: string;
+  /** Optional column letter for the product category (e.g. "E"). */
+  categoryCol?: string;
 };
 
 /**
@@ -431,6 +439,9 @@ export const parseCsvProducts = (
   let skuIndex: number | null = null;
   let nameIndex: number | null = null;
   let priceIndex: number | null = null;
+  // Optional brand / category columns (only resolvable via a custom mapping).
+  let brandIndex: number | null = null;
+  let categoryIndex: number | null = null;
   // Index (within `dataRows`) of the row that was used as the header row.
   // `null` when a custom mapping or positional fallback was used instead.
   let headerRowIndex: number | null = null;
@@ -440,6 +451,8 @@ export const parseCsvProducts = (
     skuIndex = customMapping.skuCol ? columnLetterToIndex(customMapping.skuCol) : null;
     nameIndex = customMapping.titleCol ? columnLetterToIndex(customMapping.titleCol) : null;
     priceIndex = customMapping.priceCol ? columnLetterToIndex(customMapping.priceCol) : null;
+    brandIndex = customMapping.brandCol ? columnLetterToIndex(customMapping.brandCol) : null;
+    categoryIndex = customMapping.categoryCol ? columnLetterToIndex(customMapping.categoryCol) : null;
   } else {
     // Dynamic header detection: scan the first few rows for the real header row
     // instead of assuming it is always the very first row. This handles feeds
@@ -572,10 +585,21 @@ export const parseCsvProducts = (
       }
     }
 
+    // ─── Capture optional brand / category ──────────────────────────────────
+    // Only populated when the corresponding column is mapped and non-empty.
+    const brand = brandIndex !== null && brandIndex >= 0
+      ? (record[brandIndex] ?? "").trim()
+      : "";
+    const category = categoryIndex !== null && categoryIndex >= 0
+      ? (record[categoryIndex] ?? "").trim()
+      : "";
+
     products.push({
       sku,
       name: title,
       price,
+      ...(brand !== "" && { brand }),
+      ...(category !== "" && { category }),
     });
   }
 

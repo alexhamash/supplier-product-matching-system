@@ -1,8 +1,9 @@
 import React, { useState, type ChangeEvent } from "react";
-import { Search, Plus, Package, Table2, Trash2, X } from "lucide-react";
+import { Search, Plus, Package, Table2, Trash2, X, Upload } from "lucide-react";
 import { useProducts } from "../context/ProductContext";
 import type { MainProduct } from "../types";
 import SupplierMatrixModal from "../components/SupplierMatrixModal";
+import ImportMainProductsModal from "../components/ImportMainProductsModal";
 
 interface FormData {
   name: string;
@@ -12,7 +13,7 @@ interface FormData {
 }
 
 const MainProducts: React.FC = () => {
-  const { products, updateProduct, addProduct, deleteProduct } = useProducts();
+  const { products, updateProduct, addProduct, deleteProduct, refresh } = useProducts();
 
   const [searchTerm, setSearchTerm] = useState<string>("");
 
@@ -32,6 +33,9 @@ const MainProducts: React.FC = () => {
 
   // The main product currently being inspected in the Supplier Matrix modal.
   const [matrixProduct, setMatrixProduct] = useState<MainProduct | null>(null);
+
+  // Whether the "Import Catalog" modal is open.
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
 
   // Deduplicate products by unique ID before filtering to avoid duplicate keys.
   const uniqueProducts = Array.from(
@@ -147,21 +151,30 @@ const MainProducts: React.FC = () => {
             Manage your central store catalog.
           </p>
         </div>
-        <button
-          onClick={() => {
-            if (isFormVisible) {
-              // Closing/cancelling the form: reset to a fresh state.
-              resetForm();
-              setIsFormVisible(false);
-            } else {
-              handleOpenAddForm();
-            }
-          }}
-          className="bg-[#3B82F6] hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          {isFormVisible ? "Cancel" : "Add Product"}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            Import Catalog
+          </button>
+          <button
+            onClick={() => {
+              if (isFormVisible) {
+                // Closing/cancelling the form: reset to a fresh state.
+                resetForm();
+                setIsFormVisible(false);
+              } else {
+                handleOpenAddForm();
+              }
+            }}
+            className="bg-[#3B82F6] hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            {isFormVisible ? "Cancel" : "Add Product"}
+          </button>
+        </div>
       </div>
 
       {/* Форма додавання товару */}
@@ -305,6 +318,14 @@ const MainProducts: React.FC = () => {
           mainProductId={matrixProduct.id}
           mainProductName={matrixProduct.name}
           onClose={() => setMatrixProduct(null)}
+        />
+      )}
+
+      {/* Import Catalog modal */}
+      {isImportModalOpen && (
+        <ImportMainProductsModal
+          onClose={() => setIsImportModalOpen(false)}
+          onImported={() => void refresh()}
         />
       )}
 

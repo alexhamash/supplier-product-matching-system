@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middlewares/errorHandler";
+import { importMainProducts } from "../services/mainProductImportService";
+import { FeedMappingError } from "../services/feedParser";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -341,6 +343,82 @@ export const getMainProductMatrix = async (
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * POST /api/main-products/import
+ * Batch-import Main Products into the central catalog from a Google Sheet / CSV
+ * feed. Reuses the shared feed-parsing engine and upserts each product by SKU.
+ *
+ * Request body:
+ *   {
+ *     feedUrl: string,            // Google Sheets URL or CSV file URL
+ *     feedType: "CSV" | "GOOGLE_SHEETS",
+ *     sheetGid?: string,          // optional Google Sheet tab/gid
+ *     startRow?: number,          // header rows to skip (default 1)
+ *     customMapping?: { skuCol, titleCol, priceCol, brandCol?, categoryCol? },
+ *     stopWords?: string
+ *   }
+ *
+ * Returns a summary with created / updated item counts.
+ */
+export const importMainProductsFromFeed = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const body = req.body as {
+      feedUrl?: string;
+      feedType?: "CSV" | "GOOGLE_SHEETS";
+      sheetGid?: string | null;
+      startRow?: number | null;
+      customMapping?: {
+        skuCol?: string;
+        titleCol?: string;
+        priceCol?: string;
+        brandCol?: string;
+        categoryCol?: string;
+      } | null;
+      stopWords?: string | null;
+    };
+
+    // ─── Validation ──────────────────────────────────────────────────────────
+    if (!body.feedUrl || typeof body.feedUrl !== "string" || body.feedUrl.trim() === "") {
+      throw new AppError("Field 'feedUrl' is required and must be a non-empty string.", 400);
+    }
+    if (body.feedType !== "CSV" && body.feedType !== "GOOGLE_SHEETS") {
+      throw new AppError("Field 'feedType' must be one of: CSV, GOOGLE_SHEETS.", 400);
+    }
+
+    const result = await importMainProducts(body.feedUrl.trim(), {
+      feedType: body.feedType,
+      sheetGid: body.sheetGid,
+      startRow: body.startRow,
+      customMapping: body.customMapping,
+      stopWords: body.stopWords,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Catalog import completed: ${result.created} created, ${result.updated} updated.`,
+      data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    // Feed column-mapping / validation failures are user errors, not server
+    // errors. Surface them as a 400 Bad Request with the parser's message
+    // instead of letting them bubble up as an unhandled 500.
+    if (err instanceof FeedMappingError) {
+      res.status(400).json({
+        success: false,
+        message: err.message,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     next(err);
   }
 };
