@@ -327,7 +327,7 @@ const Suppliers: React.FC = () => {
   );
 
   return (
-    <div className="w-full max-w-6xl mx-auto pb-12">
+    <div className="p-6 space-y-6 max-w-[1600px] mx-auto w-full">
       {/* Toast notification */}
       {toast && (
         <div
@@ -356,12 +356,12 @@ const Suppliers: React.FC = () => {
       )}
 
       {/* Header - залишаємо як був */}
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-bold text-[#0F172A] tracking-tight mb-1">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Suppliers & Catalogs
           </h1>
-          <p className="text-[#64748B] text-[15px]">
+          <p className="text-sm text-slate-500 mt-1">
             Manage your connected suppliers and import catalogs.
           </p>
         </div>
@@ -394,7 +394,7 @@ const Suppliers: React.FC = () => {
 
       {/* Success screen shown after a supplier is created and its feed synced */}
       {isFormVisible && createdResult && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-8 mb-6 text-center">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-8 text-center">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
             <CheckCircle2 className="w-9 h-9 text-emerald-600" />
           </div>
@@ -416,7 +416,7 @@ const Suppliers: React.FC = () => {
 
       {/* Форма додавання постачальника */}
       {isFormVisible && !createdResult && (
-        <div className="bg-slate-50 border border-blue-200 rounded-xl p-6 mb-6">
+        <div className="bg-slate-50 border border-blue-200 rounded-xl p-6">
           <h3 className="text-lg font-bold mb-4 text-slate-900">
             {editingId ? "Edit Supplier" : "Add New Supplier"}
           </h3>
@@ -609,7 +609,7 @@ const Suppliers: React.FC = () => {
       )}
 
       {/* Пошук - підключаємо searchTerm */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm">
+      <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
         <div className="relative flex-1 max-w-md w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
@@ -623,7 +623,7 @@ const Suppliers: React.FC = () => {
       </div>
 
       {/* Таблиця */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-500 uppercase">
           <div className="col-span-3">Supplier Name</div>
           <div className="col-span-4">Catalog Source</div>

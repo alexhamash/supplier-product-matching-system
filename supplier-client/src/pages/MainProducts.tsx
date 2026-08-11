@@ -223,14 +223,14 @@ const MainProducts: React.FC = () => {
   };
 
   return (
-    <div className="w-full">
+    <div className="p-6 space-y-6 max-w-[1600px] mx-auto w-full">
       {/* Header section */}
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-[28px] font-bold text-[#0F172A] tracking-tight mb-1">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Main Products
           </h1>
-          <p className="text-[#64748B] text-[15px]">
+          <p className="text-sm text-slate-500 mt-1">
             Manage your central store catalog.
           </p>
         </div>
@@ -262,7 +262,7 @@ const MainProducts: React.FC = () => {
 
       {/* Форма додавання товару */}
       {isFormVisible && (
-        <div className="bg-slate-50 border border-blue-200 rounded-xl p-6 mb-6">
+        <div className="bg-slate-50 border border-blue-200 rounded-xl p-6">
           <h3 className="text-lg font-bold mb-4 text-slate-900">
             {editingProductId ? "Edit Product" : "Add New Product"}
           </h3>
@@ -306,7 +306,7 @@ const MainProducts: React.FC = () => {
       )}
 
       {/* Filter section */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 flex items-center gap-3 shadow-sm">
+      <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-4">
         <div className="relative flex-1 w-full max-w-[50%]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
@@ -362,7 +362,7 @@ const MainProducts: React.FC = () => {
       </div>
 
       {/* Data table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mb-8">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
         {/* Table Header */}
         <div className="grid grid-cols-12 gap-4 px-4 py-2.5 border-b border-slate-200 bg-slate-50/50 text-slate-500 font-semibold text-xs uppercase tracking-wider">
           <div className={`${nameColSpan === 4 ? "col-span-4" : nameColSpan === 6 ? "col-span-6" : "col-span-8"} text-left`}>

@@ -471,19 +471,19 @@ const ProductMatching: React.FC = () => {
   if (loading) return <div>Завантаження...</div>;
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="p-6 space-y-6 max-w-[1600px] mx-auto w-full flex flex-col">
       {/* Header section */}
-      <div className="flex justify-between items-center mb-3 shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
-          <h1 className="text-[20px] font-bold text-[#0F172A] tracking-tight">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Product Linking
           </h1>
-          <p className="text-[#64748B] text-[13px]">
+          <p className="text-sm text-slate-500 mt-1">
             Select a main catalog item to review and link incoming supplier
             products to it.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => void loadSupplierProducts()}
             disabled={productsLoading}
@@ -520,7 +520,7 @@ const ProductMatching: React.FC = () => {
       {/* Main Content Area - Split View */}
       <div className="flex flex-col lg:flex-row gap-3 flex-1 min-h-0">
         {/* Left Side: Main Products Catalog */}
-        <div className="w-full lg:w-[35%] flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm h-[calc(100vh-120px)]">
+        <div className="w-full lg:w-[35%] flex flex-col bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-sm h-[calc(100vh-120px)]">
           <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <Database className="w-4 h-4 text-indigo-600" />
@@ -614,7 +614,7 @@ const ProductMatching: React.FC = () => {
         {/* Right Side: Linking Workspace */}
         <div className="w-full lg:w-[65%] flex flex-col h-[calc(100vh-120px)]">
           {/* Top Panel: Selected Main Product Details */}
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mb-2 shrink-0">
+          <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-sm mb-2 shrink-0">
             <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
               <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[11px] font-bold">
                 1
@@ -657,7 +657,7 @@ const ProductMatching: React.FC = () => {
           </div>
 
           {/* Bottom Panel: Find Supplier Products to Link */}
-          <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="bg-white border border-slate-200/80 rounded-xl shadow-sm flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[11px] font-bold">
