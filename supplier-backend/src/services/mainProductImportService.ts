@@ -19,6 +19,8 @@ export type MainProductImportOptions = {
   customMapping?: FeedColumnMapping | null;
   /** Comma-separated negative keywords; rows whose title contains any are skipped. */
   stopWords?: string | null;
+  /** Names of Google Sheet tabs/sheets to skip during a multi-tab import. */
+  ignoredTabs?: string[] | null;
 };
 
 /**
@@ -76,6 +78,7 @@ export const importMainProducts = async (
     startRow: options.startRow,
     customMapping: options.customMapping,
     stopWords: options.stopWords,
+    ignoredTabs: options.ignoredTabs,
     supplierName: "MAIN",
     prefixLength: 4,
     requirePrice: false,

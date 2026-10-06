@@ -19,6 +19,8 @@ type SupplierBody = {
     priceCol?: string;
   };
   stopWords?: string;
+  /** Comma-separated Google Sheet tab names to completely ignore during import. */
+  ignoredTabs?: string;
 };
 
 /**
@@ -111,6 +113,7 @@ export const createSupplier = async (
         startRow: body.startRow ?? 1,
         customMapping: body.customMapping ?? undefined,
         stopWords: body.stopWords?.trim() || null,
+        ignoredTabs: body.ignoredTabs?.trim() || null,
       },
     });
 
@@ -119,7 +122,14 @@ export const createSupplier = async (
     let importedCount = 0;
     if (supplier.feedUrl) {
       try {
-        const ingestion = await ingestSupplierFeed(supplier.id);
+        const ingestion = await ingestSupplierFeed(supplier.id, {
+          ignoredTabs: supplier.ignoredTabs
+            ? supplier.ignoredTabs
+                .split(",")
+                .map((t) => t.trim())
+                .filter((t) => t !== "")
+            : undefined,
+        });
         importedCount = ingestion.created;
       } catch (err) {
         // The supplier was created successfully; surface the sync failure in the

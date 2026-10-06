@@ -49,6 +49,7 @@ const toSupplier = (api: ApiSupplier): Supplier => ({
   startRow: api.startRow ?? 1,
   customMapping: api.customMapping ?? null,
   stopWords: api.stopWords ?? null,
+  ignoredTabs: api.ignoredTabs ?? null,
 });
 
 const toSuppliers = (list: ApiSupplier[]): Supplier[] =>
@@ -115,8 +116,12 @@ export const createSupplier = async (
  */
 export const syncSupplier = async (
   supplierId: string,
+  options?: { ignoredTabs?: string[] },
 ): Promise<SyncSupplierResponse> => {
-  return apiClient.post<SyncSupplierResponse>(`suppliers/${supplierId}/sync`);
+  return apiClient.post<SyncSupplierResponse>(
+    `suppliers/${supplierId}/sync`,
+    options?.ignoredTabs ? { ignoredTabs: options.ignoredTabs } : undefined,
+  );
 };
 
 /**

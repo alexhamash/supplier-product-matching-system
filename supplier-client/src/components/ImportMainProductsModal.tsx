@@ -38,6 +38,7 @@ const ImportMainProductsModal: React.FC<ImportMainProductsModalProps> = ({
   const [mapping, setMapping] = useState<MappingForm>(EMPTY_MAPPING);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string | null>(null);
+  const [ignoredTabsInput, setIgnoredTabsInput] = useState<string>("");
 
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +74,16 @@ const ImportMainProductsModal: React.FC<ImportMainProductsModalProps> = ({
   };
 
   /**
+   * Parse the comma-separated "Ignored Sheets / Tabs" input into a trimmed,
+   * non-empty array of tab names (e.g. "Drafts, Archive" → ["Drafts", "Archive"]).
+   */
+  const parseIgnoredTabs = (): string[] =>
+    ignoredTabsInput
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t !== "");
+
+  /**
    * Submit the import request to POST /api/main-products/import.
    *
    * When a CSV file was uploaded, its text content is sent as a data URL so the
@@ -105,6 +116,7 @@ const ImportMainProductsModal: React.FC<ImportMainProductsModalProps> = ({
           brandCol: mapping.brandCol || undefined,
           categoryCol: mapping.categoryCol || undefined,
         },
+        ignoredTabs: parseIgnoredTabs(),
       });
       setResult(response);
       onImported?.();
@@ -278,6 +290,27 @@ const ImportMainProductsModal: React.FC<ImportMainProductsModalProps> = ({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Ignored sheets / tabs */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Ignored Sheets / Tabs{" "}
+              <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={ignoredTabsInput}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setIgnoredTabsInput(e.target.value)
+              }
+              placeholder="Drafts, Archive, Instructions"
+              className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Comma-separated tab names to skip during a multi-tab Google Sheet
+              import (matched case-insensitively).
+            </p>
           </div>
 
           {/* Error */}

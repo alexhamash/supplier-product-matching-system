@@ -63,6 +63,8 @@ export interface Supplier {
   customMapping?: FeedColumnMapping | null;
   /** Comma-separated negative keywords used to ignore rows. */
   stopWords?: string | null;
+  /** Comma-separated Google Sheet tab names to completely ignore during import. */
+  ignoredTabs?: string | null;
 }
 
 export interface MatchResult {
@@ -134,6 +136,7 @@ export interface ApiSupplier {
   startRow?: number;
   customMapping?: FeedColumnMapping | null;
   stopWords?: string | null;
+  ignoredTabs?: string | null;
 }
 
 /** Supplier product as returned by the backend REST API. */
@@ -214,6 +217,8 @@ export interface ImportMainProductsPayload {
   startRow?: number | null;
   customMapping?: MainProductImportMapping | null;
   stopWords?: string | null;
+  /** Names of Google Sheet tabs/sheets to skip during a multi-tab import. */
+  ignoredTabs?: string[];
 }
 
 /** Response from POST /api/main-products/import. */
@@ -237,6 +242,8 @@ export interface CreateSupplierPayload {
   startRow?: number;
   customMapping?: FeedColumnMapping;
   stopWords?: string;
+  /** Comma-separated Google Sheet tab names to completely ignore during import. */
+  ignoredTabs?: string;
 }
 
 /**
@@ -271,6 +278,8 @@ export interface UpdateFeedConfigPayload {
   startRow?: number;
   customMapping?: FeedColumnMapping;
   stopWords?: string;
+  /** Comma-separated Google Sheet tab names to completely ignore during import. */
+  ignoredTabs?: string;
 }
 
 /** Response from the supplier feed sync endpoint. */

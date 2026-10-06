@@ -61,6 +61,9 @@ model Supplier {
   customMapping Json?
   /// Comma-separated negative keywords used to ignore rows (e.g. "чохол, скло").
   stopWords String?
+  /// Comma-separated Google Sheet tab names to completely ignore during import
+  /// (e.g. "Drafts, Archive, Інструкція").
+  ignoredTabs String?
 
   supplierProducts SupplierProduct[]
 

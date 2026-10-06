@@ -63,6 +63,13 @@ export type FeedParseOptions = {
    * still parsed and their price defaults to 0.
    */
   requirePrice?: boolean;
+  /**
+   * Names of Google Sheet tabs/sheets to skip during a multi-tab import.
+   *
+   * Matching is case-insensitive and trimmed. Any tab whose name matches an
+   * entry here is excluded from the parsed result (e.g. ["Drafts", "Archive"]).
+   */
+  ignoredTabs?: string[] | null;
 };
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
@@ -316,16 +323,29 @@ const extractSpreadsheetId = (url: string): string | null => {
 };
 
 /**
+ * A single tab/sheet discovered in a Google Sheet's `htmlview` page.
+ */
+type SheetTab = {
+  /** The numeric gid used to export this tab as CSV. */
+  gid: string;
+  /** The human-readable tab name (may be empty if it could not be scraped). */
+  name: string;
+};
+
+/**
  * Fetch the HTML view page of a Google Sheet and scrape the `gid` identifiers
- * of every tab/sheet it contains.
+ * (and, where possible, the tab names) of every tab/sheet it contains.
  *
  * Google Sheets exposes the list of tabs in the `htmlview` page as links of the
  * form `#gid=123456789`. We collect every unique `gid` so the caller can export
- * and parse each tab individually.
+ * and parse each tab individually. When a tab link also carries a readable name
+ * (e.g. `<a href="#gid=123">Drafts</a>`), it is captured so tabs can be filtered
+ * by name.
  *
- * Returns an array of `gid` strings (possibly empty if none could be scraped).
+ * Returns an array of `SheetTab` objects (possibly empty if none could be
+ * scraped).
  */
-const fetchSheetGids = async (spreadsheetId: string): Promise<string[]> => {
+const fetchSheetTabs = async (spreadsheetId: string): Promise<SheetTab[]> => {
   const htmlUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/htmlview`;
   const response = await axios.get<string>(htmlUrl, {
     responseType: "text",
@@ -341,14 +361,31 @@ const fetchSheetGids = async (spreadsheetId: string): Promise<string[]> => {
     return [];
   }
 
-  const gids = new Set<string>();
+  // Collect every unique gid, keeping the first (most likely the active) tab.
+  const tabsByGid = new Map<string, SheetTab>();
   const gidRegex = /[#&]gid=(\d+)/g;
   let match: RegExpExecArray | null;
   while ((match = gidRegex.exec(response.data)) !== null) {
-    gids.add(match[1]);
+    const gid = match[1];
+    if (!tabsByGid.has(gid)) {
+      tabsByGid.set(gid, { gid, name: "" });
+    }
   }
 
-  return Array.from(gids);
+  // Try to attach readable tab names from anchor links of the form
+  // `<a href="#gid=123">Tab Name</a>`.
+  const anchorRegex = /<a[^>]*href=["'][^"']*[#&]gid=(\d+)[^"']*["'][^>]*>([^<]*)<\/a>/gi;
+  let anchorMatch: RegExpExecArray | null;
+  while ((anchorMatch = anchorRegex.exec(response.data)) !== null) {
+    const gid = anchorMatch[1];
+    const name = anchorMatch[2].trim();
+    const existing = tabsByGid.get(gid);
+    if (existing && name !== "" && existing.name === "") {
+      existing.name = name;
+    }
+  }
+
+  return Array.from(tabsByGid.values());
 };
 
 // ─── CSV Fetching & Parsing ─────────────────────────────────────────────────
@@ -664,18 +701,41 @@ export const fetchAndParseFeed = async (
 
     // If a specific tab is requested, parse only that tab (existing behaviour).
     if (spreadsheetId && !options?.sheetGid) {
-      const gids = await fetchSheetGids(spreadsheetId);
+      const tabs = await fetchSheetTabs(spreadsheetId);
 
-      if (gids.length > 0) {
+      if (tabs.length > 0) {
+        // Normalise the user's ignored-tab list (case-insensitive, trimmed) so
+        // tab names can be matched reliably regardless of casing / whitespace.
+        const ignored = (options?.ignoredTabs ?? [])
+          .map((t) => t.trim().toLowerCase())
+          .filter((t) => t !== "");
+        const ignoredSet = new Set(ignored);
+
+        // Drop any tab whose name matches an ignored entry.
+        const activeTabs = tabs.filter((tab) => {
+          const normalizedName = tab.name.trim().toLowerCase();
+          if (normalizedName !== "" && ignoredSet.has(normalizedName)) {
+            console.log(
+              `[feedParser] Ignored tab "${tab.name}" as requested by user configuration.`,
+            );
+            return false;
+          }
+          return true;
+        });
+
         console.log(
-          `[feedParser] Found ${gids.length} tab(s) in Google Sheet: ${JSON.stringify(gids)}`,
+          `[feedParser] Found ${tabs.length} tab(s) in Google Sheet: ` +
+            `${JSON.stringify(tabs.map((t) => t.name || t.gid))}` +
+            (ignored.length > 0
+              ? `; ignoring ${ignored.length} configured tab name(s).`
+              : ""),
         );
 
         const combined: ParsedFeedProduct[] = [];
         let totalSkipped = 0;
 
-        for (const gid of gids) {
-          const csvUrl = toGoogleSheetsCsvUrl(feedUrl, gid);
+        for (const tab of activeTabs) {
+          const csvUrl = toGoogleSheetsCsvUrl(feedUrl, tab.gid);
           if (!csvUrl) continue;
 
           try {
@@ -684,14 +744,15 @@ export const fetchAndParseFeed = async (
             combined.push(...result.products);
             totalSkipped += result.skippedRows;
             console.log(
-              `[feedParser] Tab gid=${gid}: parsed ${result.products.length} product(s), ` +
+              `[feedParser] Tab gid=${tab.gid}${tab.name ? ` ("${tab.name}")` : ""}: ` +
+                `parsed ${result.products.length} product(s), ` +
                 `skipped ${result.skippedRows} row(s).`,
             );
           } catch (err) {
             // A single unparseable tab should not abort the whole feed. Log and
             // continue with the remaining tabs.
             console.warn(
-              `[feedParser] Skipping tab gid=${gid} due to parse error: ` +
+              `[feedParser] Skipping tab gid=${tab.gid} due to parse error: ` +
                 `${err instanceof Error ? err.message : String(err)}`,
             );
           }

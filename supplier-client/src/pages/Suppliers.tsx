@@ -20,6 +20,7 @@ const Suppliers: React.FC = () => {
     titleCol: string;
     priceCol: string;
     stopWords: string;
+    ignoredTabs: string;
   }>({
     name: "",
     sheetUrl: "",
@@ -32,6 +33,7 @@ const Suppliers: React.FC = () => {
     titleCol: "B",
     priceCol: "C",
     stopWords: "",
+    ignoredTabs: "",
   });
 
   const [isFormVisible, setIsFormVisible] = useState<boolean>(false);
@@ -189,6 +191,7 @@ const Suppliers: React.FC = () => {
       titleCol: "B",
       priceCol: "C",
       stopWords: "",
+      ignoredTabs: "",
     });
   };
 
@@ -255,6 +258,7 @@ const Suppliers: React.FC = () => {
               }
             : null,
           stopWords: formData.stopWords.trim() || null,
+          ignoredTabs: formData.ignoredTabs.trim() || null,
         });
 
         setIsFormVisible(false);
@@ -282,6 +286,7 @@ const Suppliers: React.FC = () => {
                 }
               : undefined,
             stopWords: formData.stopWords.trim() || undefined,
+            ignoredTabs: formData.ignoredTabs.trim() || undefined,
           });
 
           // Switch the form view to the success screen with the imported count.
@@ -590,6 +595,23 @@ const Suppliers: React.FC = () => {
                     />
                     <p className="text-[11px] text-slate-400 mt-1">
                       Comma-separated keywords. Rows whose title contains any of them are skipped.
+                    </p>
+                  </div>
+
+                  {/* Ignored Sheets / Tabs */}
+                  <div className="col-span-2">
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">
+                      Ignored Sheets / Tabs (Skip Names)
+                    </label>
+                    <input
+                      name="ignoredTabs"
+                      value={formData.ignoredTabs}
+                      onChange={handleInputChange}
+                      className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                      placeholder="e.g. Drafts, Archive, Instructions, Інструкція"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Comma-separated sheet names to completely ignore during import.
                     </p>
                   </div>
                 </div>

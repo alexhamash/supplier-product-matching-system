@@ -384,6 +384,7 @@ export const importMainProductsFromFeed = async (
         categoryCol?: string;
       } | null;
       stopWords?: string | null;
+      ignoredTabs?: string[] | null;
     };
 
     // ─── Validation ──────────────────────────────────────────────────────────
@@ -400,6 +401,7 @@ export const importMainProductsFromFeed = async (
       startRow: body.startRow,
       customMapping: body.customMapping,
       stopWords: body.stopWords,
+      ignoredTabs: body.ignoredTabs,
     });
 
     // Run the global auto-link pass across ALL unmatched supplier products. This

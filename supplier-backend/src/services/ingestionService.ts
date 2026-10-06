@@ -280,6 +280,7 @@ export const autoLinkByExactSku = async (): Promise<AutoLinkByExactSkuResult> =>
  */
 export const ingestSupplierFeed = async (
   supplierId: string,
+  options?: { ignoredTabs?: string[] },
 ): Promise<IngestionResult> => {
   const supplier = await prisma.supplier.findUnique({
     where: { id: supplierId },
@@ -295,6 +296,16 @@ export const ingestSupplierFeed = async (
     );
   }
 
+  // Resolve the ignored-tab list: prefer a per-request override, otherwise fall
+  // back to the supplier's persisted comma-separated `ignoredTabs` config.
+  const persistedIgnoredTabs = supplier.ignoredTabs
+    ? supplier.ignoredTabs
+        .split(",")
+        .map((t) => t.trim())
+        .filter((t) => t !== "")
+    : undefined;
+  const effectiveIgnoredTabs = options?.ignoredTabs ?? persistedIgnoredTabs;
+
   // 1 & 2. Fetch and parse the feed, honouring the supplier's advanced feed
   // configuration (sheet tab/gid, start row, custom column mapping, stop words).
   const { products, skippedRows } = await fetchAndParseFeed(
@@ -308,6 +319,7 @@ export const ingestSupplierFeed = async (
         | null
         | undefined,
       stopWords: supplier.stopWords,
+      ignoredTabs: effectiveIgnoredTabs,
       supplierName: supplier.name,
     },
   );

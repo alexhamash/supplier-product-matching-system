@@ -20,6 +20,7 @@ const SupplierImport: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<SyncSupplierResponse | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [ignoredTabsInput, setIgnoredTabsInput] = useState<string>("");
 
   useEffect(() => {
     getSuppliers().then((allSuppliers) => {
@@ -33,6 +34,16 @@ const SupplierImport: React.FC = () => {
     });
   }, [id, navigate]);
 
+  /**
+   * Parse the comma-separated "Ignored Sheets / Tabs" input into a trimmed,
+   * non-empty array of tab names (e.g. "Drafts, Archive" → ["Drafts", "Archive"]).
+   */
+  const parseIgnoredTabs = (): string[] =>
+    ignoredTabsInput
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t !== "");
+
   const handleStartImport = async (): Promise<void> => {
     if (!id) return;
     setIsImporting(true);
@@ -43,7 +54,7 @@ const SupplierImport: React.FC = () => {
       // Trigger the real backend ingestion pipeline:
       // POST /api/suppliers/:id/sync → fetches the feed, upserts products,
       // handles out-of-stock transitions, recalculates matches, updates lastSyncedAt.
-      const result = await syncSupplier(id);
+      const result = await syncSupplier(id, { ignoredTabs: parseIgnoredTabs() });
 
       // Refresh the shared context with the freshly-imported products.
       const products = await getSupplierProducts(id);
@@ -84,6 +95,29 @@ const SupplierImport: React.FC = () => {
         <p className="text-slate-500 mb-6 font-mono text-sm">
           Source: {currentSupplier.sheetUrl}
         </p>
+
+        {!importResult && !importError ? (
+          <>
+            {/* Ignored sheets / tabs */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Ignored Sheets / Tabs{" "}
+                <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={ignoredTabsInput}
+                onChange={(e) => setIgnoredTabsInput(e.target.value)}
+                placeholder="Drafts, Archive, Instructions"
+                className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Comma-separated tab names to skip during a multi-tab Google Sheet
+                import (matched case-insensitively).
+              </p>
+            </div>
+          </>
+        ) : null}
 
         {!importResult && !importError ? (
           <button

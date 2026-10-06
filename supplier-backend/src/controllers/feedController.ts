@@ -22,6 +22,8 @@ type FeedConfigBody = {
     priceCol?: string;
   };
   stopWords?: string;
+  /** Comma-separated Google Sheet tab names to completely ignore during import. */
+  ignoredTabs?: string;
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -107,6 +109,10 @@ const validateFeedConfig = (body: Record<string, unknown>): string[] => {
     errors.push("Field 'stopWords' must be a string when provided.");
   }
 
+  if (body.ignoredTabs !== undefined && typeof body.ignoredTabs !== "string") {
+    errors.push("Field 'ignoredTabs' must be a string when provided.");
+  }
+
   return errors;
 };
 
@@ -148,7 +154,13 @@ export const syncSupplierFeed = async (
       );
     }
 
-    const result = await ingestSupplierFeed(supplierId);
+    const ignoredTabs = Array.isArray(req.body?.ignoredTabs)
+      ? (req.body.ignoredTabs as unknown[]).filter(
+          (t): t is string => typeof t === "string",
+        )
+      : undefined;
+
+    const result = await ingestSupplierFeed(supplierId, { ignoredTabs });
 
     // Run the exact-SKU auto-link pass after ingestion completes. This catches
     // any supplier products whose matching MainProduct was added to the catalog
@@ -230,6 +242,7 @@ export const updateSupplierFeedConfig = async (
         priceCol?: string;
       };
       stopWords?: string | null;
+      ignoredTabs?: string | null;
     } = {};
 
     if (body.feedUrl !== undefined) {
@@ -252,6 +265,9 @@ export const updateSupplierFeedConfig = async (
     }
     if (body.stopWords !== undefined) {
       data.stopWords = body.stopWords.trim() === "" ? null : body.stopWords.trim();
+    }
+    if (body.ignoredTabs !== undefined) {
+      data.ignoredTabs = body.ignoredTabs.trim() === "" ? null : body.ignoredTabs.trim();
     }
 
     // If a Google Sheets URL is provided, validate it can be converted to a
@@ -285,6 +301,7 @@ export const updateSupplierFeedConfig = async (
         startRow: supplier.startRow,
         customMapping: supplier.customMapping,
         stopWords: supplier.stopWords,
+        ignoredTabs: supplier.ignoredTabs,
       },
       timestamp: new Date().toISOString(),
     });
