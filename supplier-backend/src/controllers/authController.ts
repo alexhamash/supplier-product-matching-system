@@ -3,11 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middlewares/errorHandler";
-
-// ─── JWT Secret & Expiry ────────────────────────────────────────────────────
-
-const JWT_SECRET: string = process.env.JWT_SECRET || "dev-secret-change-me";
-const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "7d";
+import { JWT_SECRET, JWT_EXPIRES_IN } from "../config/env";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { AppError } from "./errorHandler";
+import { JWT_SECRET } from "../config/env";
 
 // ─── JWT Payload Shape ──────────────────────────────────────────────────────
 
@@ -20,10 +21,6 @@ declare global {
     }
   }
 }
-
-// ─── JWT Secret ─────────────────────────────────────────────────────────────
-
-const JWT_SECRET: string = process.env.JWT_SECRET || "dev-secret-change-me";
 
 // ─── Auth Middleware ────────────────────────────────────────────────────────
 

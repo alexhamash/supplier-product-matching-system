@@ -34,10 +34,23 @@ export const notFoundHandler = (
 // ─── Global Error Handler ───────────────────────────────────────────────────
 
 /**
+ * Detect Prisma database errors (e.g. PrismaClientKnownRequestError,
+ * PrismaClientValidationError) without importing the runtime classes, so the
+ * handler stays dependency-light and works even if Prisma fails to load.
+ */
+const isPrismaError = (err: Error): boolean =>
+  err.name.startsWith("PrismaClient") ||
+  typeof (err as { code?: unknown }).code === "string";
+
+/**
  * Central error-handling middleware.
  *
  * - Operational errors (AppError) → known status code + message.
- * - Unexpected errors → 500 Internal Server Error (hides stack in production).
+ * - Unexpected errors → 500 Internal Server Error.
+ *
+ * In production, error stacks and internal database (Prisma) exception details
+ * are sanitized before being returned to the client. Full details are always
+ * logged server-side for debugging.
  */
 export const globalErrorHandler = (
   err: Error,
@@ -45,23 +58,35 @@ export const globalErrorHandler = (
   res: Response,
   _next: NextFunction,
 ): void => {
+  const isProduction = process.env.NODE_ENV === "production";
+
   // Default to 500 for unexpected errors
   const statusCode = err instanceof AppError ? err.statusCode : 500;
-  const message =
-    err instanceof AppError
-      ? err.message
-      : "An unexpected error occurred";
 
-  // Log the full error for debugging
+  // Always log the full error server-side for debugging.
   console.error(`[ERROR] ${statusCode} - ${err.message}`);
   if (!(err instanceof AppError)) {
     console.error(err.stack);
   }
 
+  // Determine the client-facing message.
+  let message: string;
+  if (err instanceof AppError) {
+    message = err.message;
+  } else if (isPrismaError(err)) {
+    // Never leak internal database exception details to clients.
+    message = isProduction
+      ? "A database error occurred."
+      : err.message;
+  } else {
+    message = isProduction ? "An unexpected error occurred" : err.message;
+  }
+
   res.status(statusCode).json({
     success: false,
     message,
-    ...(process.env.NODE_ENV !== "production" && { stack: err.stack }),
+    // Only expose the stack trace outside production.
+    ...(!isProduction && { stack: err.stack }),
     timestamp: new Date().toISOString(),
   });
 };

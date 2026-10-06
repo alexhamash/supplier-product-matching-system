@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 
 import mainProductRoutes from "./routes/mainProductRoutes";
 import supplierRoutes from "./routes/supplierRoutes";
@@ -14,8 +13,7 @@ import {
 } from "./middlewares/errorHandler";
 import { prisma } from "./lib/prisma";
 import { startCronService } from "./services/cronService";
-
-dotenv.config();
+import { getAllowedOrigins, corsOriginDelegate } from "./config/env";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,12 +21,26 @@ const PORT = process.env.PORT || 3001;
 // ─── CORS Configuration ──────────────────────────────────────────────────────
 // Must be registered before ANY route handlers to handle preflight OPTIONS
 // requests with the proper Access-Control-* headers.
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
+//
+// Allowed origins are resolved from ALLOWED_ORIGINS / CLIENT_URL (comma
+// separated). In development, localhost:5173 and localhost:3000 are permitted
+// by default. In production, only explicitly configured origins are allowed.
+const allowedOrigins = getAllowedOrigins();
+console.log(
+  allowedOrigins.length > 0
+    ? `[server] CORS allowed origins: ${allowedOrigins.join(", ")}`
+    : "[server] CORS: no allowed origins configured — cross-origin browser requests will be denied.",
+);
+
+app.use(
+  cors({
+    origin: corsOriginDelegate,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+    optionsSuccessStatus: 204,
+  }),
+);
 
 // ─── Request Logger ──────────────────────────────────────────────────────────
 app.use((req, _res, next) => {
